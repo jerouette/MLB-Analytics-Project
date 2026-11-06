@@ -1,0 +1,1919 @@
+---
+title: "predicting-WAR"
+author: "Jacob Rouette"
+date: "2026-11-06"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r} 
+data_path <- Sys.getenv("STATCAST_DATA_PATH")
+
+hitters <- read.csv(file.path(data_path, "FullStatcastData.csv"))
+```
+
+# Introduction to Simple fWAR Models
+
+The first stage of the modeling process focuses on developing simple linear regression models to predict player value as measured by FanGraphs Wins Above Replacement (fWAR). Rather than immediately building complex models with multiple predictors, this section examines the relationship between fWAR and one explanatory variable at a time. Looking at each variable separately provides a clear starting point for understanding which statistics are most closely related to overall player value before accounting for the effects of other variables.
+
+Simple linear regression also provides an important baseline for the rest of the project. By modeling each predictor separately, it is possible to compare how well traditional offensive statistics, advanced sabermetric metrics, and Statcast measurements explain differences in fWAR. This allows the analysis to directly compare older, more familiar statistics with newer measures designed to capture player performance and underlying skill more effectively.
+
+The models in this section will focus on several different categories of baseball statistics. Traditional measures such as home runs, batting average, and RBI will be compared with advanced metrics such as wOBA, wRC+, and Off. Statcast measures, including xwOBA, Barrel%, HardHit%, and average exit velocity, will also be examined. Because these statistics measure different aspects of performance, comparing them individually can help determine which types of metrics have the strongest relationships with overall player value.
+
+Simple regression models are also useful because their results are relatively easy to interpret. Each model estimates the expected change in fWAR associated with a one-unit increase in the predictor. Model fit will be evaluated using measures such as R² and adjusted R², while residual error and statistical significance will provide additional information about the strength and reliability of each relationship. These results will later be compared with the more comprehensive models developed throughout the project.
+
+An important goal of this section is not to assume that a single statistic can fully explain player value. fWAR incorporates offensive, defensive, and baserunning contributions, so a statistic that focuses on only one part of a player's performance may have limited explanatory power on its own. Instead, these simple models are intended to identify useful predictors and establish a baseline against which more advanced models can be evaluated.
+
+The results from this section will provide the foundation for the multiple regression analysis developed later in the project. Variables that show strong relationships with fWAR can be considered as candidates for more comprehensive models, while variables with weaker relationships or substantial overlap with other predictors can be examined further using multicollinearity diagnostics and model-selection techniques. Ultimately, this section establishes the first comparison between traditional statistics, advanced sabermetrics, and Statcast measures and helps determine how much additional information modern baseball metrics provide when evaluating player value.
+
+
+## Traditional Statistics Models
+
+The first group of simple linear regression models examined traditional offensive statistics and their individual relationships with fWAR. The variables included batting average (BA), home runs (HR), runs batted in (RBI), runs scored (R), stolen bases (SB), on-base plus slugging (OPS), walk percentage (BB%), and strikeout percentage (K%). These statistics represent some of the most commonly used measures of offensive performance and provide a useful baseline for comparing traditional baseball evaluation methods with the advanced sabermetric and Statcast measures examined later.
+
+The results show that traditional statistics vary considerably in how well they explain differences in fWAR. OPS produced the strongest individual traditional model, with an R² of 0.572 and an adjusted R² of 0.572. This indicates that approximately 57.2% of the variation in fWAR was explained by OPS alone. Runs scored was the second strongest traditional measure, with an R² of 0.524 and an adjusted R² of 0.524. Batting average explained approximately 33.2% of the variation in fWAR, while home runs and RBI explained approximately 23.1% and 22.2%, respectively.
+
+The remaining traditional statistics showed substantially weaker relationships with fWAR. BB% explained approximately 12.8% of the variation, while stolen bases explained approximately 9.6%. Strikeout percentage produced the weakest model, with an R² of only 0.0115 and an adjusted R² of 0.0108. Although K% was statistically significant, it explained only about 1.2% of the variation in fWAR. This demonstrates an important distinction between statistical significance and explanatory power. With a relatively large sample, a variable can have a statistically significant relationship with fWAR while still providing limited information about differences in overall player value.
+
+All eight traditional predictors were statistically significant in their respective simple regression models. The estimated relationships were generally consistent with their expected direction. BA, HR, RBI, R, SB, OPS, and BB% all had positive coefficients, meaning higher values were associated with higher fWAR. K% had a negative coefficient, indicating that higher strikeout rates were associated with lower fWAR. However, the strength of these relationships varied substantially, as shown by the differences in R² values across the models.
+
+The estimated coefficients also provide an interpretable measure of the relationship between each statistic and fWAR. For example, the OPS model had an estimated coefficient of approximately 17.15, meaning that a one-unit increase in OPS was associated with an estimated 17.15-unit increase in fWAR within the fitted model. Similarly, the estimated coefficient for runs scored was approximately 0.0817, indicating that each additional run was associated with an estimated increase of approximately 0.082 fWAR. These coefficients should be interpreted within the scale and range of each statistic rather than directly compared across variables with different measurement units.
+
+The diagnostic plots generally indicated that the simple regression models were reasonable for use as baseline models, although some patterns were observed. The HR, OPS, and BB% models showed some evidence of increasing residual variability in their Scale-Location plots, suggesting possible mild heteroskedasticity. The Residuals vs. Leverage plots also showed a generally increasing pattern as fitted values increased. These patterns were not considered severe enough to prevent the models from being used as baseline comparisons, but they provide justification for examining model assumptions and potential heteroskedasticity more carefully in the later diagnostic sections of the project.
+
+Overall, the results demonstrate that traditional statistics can provide meaningful information about player value, but their explanatory power differs substantially across metrics. OPS and runs scored were the strongest traditional measures, while BA provided a moderate relationship with fWAR. HR and RBI also showed meaningful relationships, but explained considerably less variation than OPS and runs scored. In contrast, SB, BB%, and especially K% provided relatively limited explanatory power when considered individually.
+
+These results establish an important baseline for the remainder of the analysis. Traditional statistics clearly contain useful information about player value, but the differences between individual metrics suggest that statistics capturing broader aspects of offensive performance may provide a more complete picture of player value. The next section examines advanced sabermetric measures to determine whether metrics specifically designed to evaluate overall player contribution can explain more variation in fWAR than traditional statistics.
+
+```{r}
+###############################################################
+# Traditional Statistics Models
+###############################################################
+# Simple Linear Regression Models
+# Each traditional statistic is modeled individually against
+# fWAR to evaluate its relationship with overall player value.
+
+model_BA <- lm(WAR ~ BA, data = hitters)
+
+model_HR <- lm(WAR ~ HR, data = hitters)
+
+model_RBI <- lm(WAR ~ RBI, data = hitters)
+
+model_R <- lm(WAR ~ R, data = hitters)
+
+model_SB <- lm(WAR ~ SB, data = hitters)
+
+model_OPS <- lm(WAR ~ OPS, data = hitters)
+
+model_BB <- lm(WAR ~ BB_Percent, data = hitters)
+
+model_K <- lm(WAR ~ K_Percent, data = hitters)
+
+
+# Regression Summaries
+
+summary(model_BA)
+
+summary(model_HR)
+
+summary(model_RBI)
+
+summary(model_R)
+
+summary(model_SB)
+
+summary(model_OPS)
+
+summary(model_BB)
+
+summary(model_K)
+
+
+# 95% Confidence Intervals
+
+confint(model_BA)
+
+confint(model_HR)
+
+confint(model_RBI)
+
+confint(model_R)
+
+confint(model_SB)
+
+confint(model_OPS)
+
+confint(model_BB)
+
+confint(model_K)
+
+
+# Traditional Statistics Model Comparison
+
+
+traditional_models <- list(
+  BA = model_BA,
+  HR = model_HR,
+  RBI = model_RBI,
+  R = model_R,
+  SB = model_SB,
+  OPS = model_OPS,
+  BB_Percent = model_BB,
+  K_Percent = model_K
+)
+
+traditional_results <- data.frame(
+  R2 = sapply(
+    traditional_models,
+    function(x) summary(x)$r.squared
+  ),
+
+  Adjusted_R2 = sapply(
+    traditional_models,
+    function(x) summary(x)$adj.r.squared
+  ),
+
+  Coefficient = sapply(
+    traditional_models,
+    function(x) coef(x)[2]
+  ),
+
+  P_Value = sapply(
+    traditional_models,
+    function(x) summary(x)$coefficients[2, 4]
+  )
+)
+
+traditional_results
+
+
+# Diagnostic Plots
+
+
+par(mfrow = c(2,2))
+plot(model_BA)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_HR)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_RBI)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_R)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_SB)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_OPS)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_BB)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_K)
+par(mfrow = c(1,1))
+```
+
+## Advanced Sabermetric Models
+
+The second group of simple linear regression models examined advanced sabermetric measures and their relationships with fWAR. These models included weighted On-Base Average (wOBA), Weighted Runs Created Plus (wRC+), Isolated Power (ISO), Offensive Runs (Off), Baserunning Runs (BsR), and Defensive Runs (Def). Unlike traditional statistics that focus primarily on individual outcomes such as hits, home runs, or runs batted in, these metrics are designed to provide a broader measurement of a player's offensive, baserunning, and defensive contributions. Each metric was modeled separately to determine how much variation in fWAR could be explained by each measure on its own.
+
+The advanced sabermetric models generally explained substantially more variation in fWAR than the traditional statistics examined in Section 4.2. Offensive Runs (Off) produced the strongest individual model, with an R² of 0.736 and an adjusted R² of 0.736. This means that approximately 73.6% of the variation in fWAR was explained by Off in the simple regression model. Weighted Runs Created Plus (wRC+) was the second strongest model, explaining approximately 63.1% of the variation in fWAR. wOBA also demonstrated a strong relationship with fWAR, with an R² of approximately 0.600.
+
+The remaining sabermetric metrics showed weaker but still statistically significant relationships with fWAR. ISO explained approximately 27.2% of the variation in fWAR, while Defensive Runs (Def) and Baserunning Runs (BsR) explained approximately 15.1% and 11.0%, respectively. These differences demonstrate that not all advanced metrics provide the same amount of information about overall player value. Offensive value measures such as Off, wRC+, and wOBA showed considerably stronger individual relationships with fWAR than the isolated baserunning and defensive measures.
+
+All six sabermetric variables were statistically significant in their individual models, with p-values below 0.001. However, as with the traditional statistics, statistical significance alone does not indicate that a metric is a strong explanatory variable. The R² values provide a better indication of how much variation in fWAR is captured by each model. For example, BsR was statistically significant but explained only about 11.0% of the variation in fWAR, while Off explained approximately 73.6%. This difference highlights the importance of considering both statistical significance and explanatory power when comparing player evaluation metrics.
+
+The estimated coefficients were also consistent with the expected direction of the relationships. Higher values of wOBA, wRC+, ISO, Off, BsR, and Def were associated with higher fWAR. The confidence intervals for each predictor excluded zero, providing additional evidence that these relationships were statistically significant within the simple regression framework. The relatively narrow confidence intervals for the coefficients also reflect the strong statistical evidence provided by the large sample.
+
+Diagnostic analysis indicated that most of the sabermetric models did not show major issues that would immediately invalidate the simple regression approach. Some patterns were observed in the wOBA, wRC+, and ISO models. In particular, the Scale-Location plots showed a generally increasing pattern, suggesting that the variability of the residuals may increase somewhat as fitted values increase. The Residuals vs. Leverage plots also showed increasing leverage patterns at higher fitted values. These patterns were not considered severe enough to prevent the models from being used as baseline comparisons, but they indicate that variance and influential observations should be examined further in the project's later diagnostic analysis.
+
+Overall, the results show that advanced sabermetric metrics provide considerably stronger individual relationships with fWAR than many traditional statistics. Off produced the strongest simple model, followed by wRC+ and wOBA, while ISO, Def, and BsR provided more limited explanatory power. These results provide evidence that metrics designed to measure broader aspects of player contribution can capture more of the variation in overall player value than many traditional statistics. The findings also provide a useful baseline for the Statcast models in the next section, where measures of underlying offensive skill will be evaluated against both traditional and sabermetric approaches.
+
+```{r}
+###############################################################
+# Advanced Sabermetric Models
+###############################################################
+
+# Simple Linear Regression Models
+
+
+model_woba <- lm(WAR ~ wOBA, data = hitters)
+
+model_wrc <- lm(WAR ~ wRC_plus, data = hitters)
+
+model_iso <- lm(WAR ~ ISO, data = hitters)
+
+model_off <- lm(WAR ~ Off, data = hitters)
+
+model_bsr <- lm(WAR ~ BsR, data = hitters)
+
+model_def <- lm(WAR ~ Def, data = hitters)
+
+
+# Regression Summaries
+
+
+summary(model_woba)
+
+summary(model_wrc)
+
+summary(model_iso)
+
+summary(model_off)
+
+summary(model_bsr)
+
+summary(model_def)
+
+
+# 95% Confidence Intervals
+
+
+confint(model_woba)
+
+confint(model_wrc)
+
+confint(model_iso)
+
+confint(model_off)
+
+confint(model_bsr)
+
+confint(model_def)
+
+
+# Advanced Sabermetric Model Comparison
+
+
+advanced_models <- list(
+  wOBA = model_woba,
+  wRC_plus = model_wrc,
+  ISO = model_iso,
+  Off = model_off,
+  BsR = model_bsr,
+  Def = model_def
+)
+
+advanced_model_results <- data.frame(
+  R2 = sapply(
+    advanced_models,
+    function(x) summary(x)$r.squared
+  ),
+  
+  Adjusted_R2 = sapply(
+    advanced_models,
+    function(x) summary(x)$adj.r.squared
+  ),
+  
+  Coefficient = sapply(
+    advanced_models,
+    function(x) coef(x)[2]
+  ),
+  
+  P_Value = sapply(
+    advanced_models,
+    function(x) summary(x)$coefficients[2, 4]
+  )
+)
+
+advanced_model_results
+
+
+# Diagnostic Plots
+
+
+par(mfrow = c(2,2))
+plot(model_woba)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_wrc)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_iso)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_off)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_bsr)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_def)
+par(mfrow = c(1,1))
+```
+
+## Statcast Models
+
+The Statcast models examine whether newer measurements of player performance and underlying skill are associated with overall player value as measured by fWAR. These models include expected statistics such as xwOBA, xBA, xSLG, and xISO, along with measurements of contact quality such as Barrel%, Hard-Hit%, average exit velocity, launch angle, and Sweet Spot%. Unlike traditional statistics, which describe what happened on the field, several of these metrics are designed to estimate the quality of contact and expected outcomes behind those results.
+
+All nine Statcast models produced statistically significant relationships with fWAR. However, statistical significance alone does not indicate that a variable is a strong predictor of player value. The amount of variation explained by each model was more important when comparing the usefulness of the different Statcast metrics.
+
+Among the models, xwOBA produced the strongest relationship with fWAR, with an R² of 0.351 and an adjusted R² of 0.350. The estimated coefficient for xwOBA was 34.50, with a 95% confidence interval from approximately 32.01 to 36.98. This indicates a strong positive relationship between expected offensive production and overall player value. xSLG was the next strongest expected statistic, with an R² of 0.265, followed by xBA with an R² of 0.210. xISO explained approximately 17.6% of the variation in fWAR, making it weaker than the other expected offensive measures examined.
+
+The direct Statcast contact-quality measurements generally explained less variation in fWAR. Barrel% had an R² of 0.113, while average exit velocity had an R² of 0.104 and Hard-Hit% had an R² of 0.084. Although all three variables had statistically significant positive relationships with fWAR, their lower R² values suggest that contact quality by itself does not explain as much of a player's overall value as broader measures of offensive production. This is reasonable because fWAR incorporates more than just the quality of contact, including offensive, defensive, and baserunning contributions.
+
+Launch angle and Sweet Spot% showed the weakest relationships among the Statcast variables. Launch angle had an R² of only 0.020, while Sweet Spot% had an R² of 0.045. Both relationships were statistically significant, but the relatively small R² values indicate that these variables alone explain very little of the variation in fWAR. This demonstrates why statistical significance should not be interpreted as evidence that a variable is highly useful for prediction.
+
+The diagnostic plots also provided an initial assessment of the regression assumptions. The first seven models showed gradual increases in the Scale-Location and Residuals vs. Leverage plots, while the Launch Angle model showed a gradual decrease. The Sweet Spot% model did not show a notable pattern in these plots. These patterns were relatively minor and were not considered substantial enough at this stage to invalidate the models. More detailed diagnostic testing and potential adjustments will be addressed in the later modeling sections.
+
+Overall, the results show that Statcast and expected metrics provide meaningful information about player value, but their performance varies considerably by metric. xwOBA was the strongest individual Statcast-related predictor in this analysis, while launch angle and Sweet Spot% provided relatively little explanatory power on their own. Importantly, these results also suggest that newer Statcast measurements do not automatically outperform traditional or advanced sabermetric statistics. The stronger expected metrics will therefore be considered as candidates for the multiple regression models in the next section, where their predictive value can be evaluated alongside other sources of player information.
+
+```{r}
+###############################################################
+# Statcast Models
+###############################################################
+
+# Simple Linear Regression Models
+
+
+model_xwoba <- lm(WAR ~ xwOBA, data = hitters)
+
+model_xba <- lm(WAR ~ xBA, data = hitters)
+
+model_xslg <- lm(WAR ~ xSLG, data = hitters)
+
+model_xiso <- lm(WAR ~ xISO, data = hitters)
+
+model_barrel <- lm(WAR ~ Barrel_Percent, data = hitters)
+
+model_hardhit <- lm(WAR ~ HardHit_Percent, data = hitters)
+
+model_ev <- lm(WAR ~ EV_Avg, data = hitters)
+
+model_la <- lm(WAR ~ LaunchAngle_Avg, data = hitters)
+
+model_sweetspot <- lm(WAR ~ SweetSpot_Percent, data = hitters)
+
+
+# Regression Summaries
+
+
+summary(model_xwoba)
+
+summary(model_xba)
+
+summary(model_xslg)
+
+summary(model_xiso)
+
+summary(model_barrel)
+
+summary(model_hardhit)
+
+summary(model_ev)
+
+summary(model_la)
+
+summary(model_sweetspot)
+
+
+
+# 95% Confidence Intervals
+
+
+confint(model_xwoba)
+
+confint(model_xba)
+
+confint(model_xslg)
+
+confint(model_xiso)
+
+confint(model_barrel)
+
+confint(model_hardhit)
+
+confint(model_ev)
+
+confint(model_la)
+
+confint(model_sweetspot)
+
+
+# Statcast Model Comparison
+
+
+statcast_models <- list(
+  xwOBA = model_xwoba,
+  xBA = model_xba,
+  xSLG = model_xslg,
+  xISO = model_xiso,
+  Barrel_Percent = model_barrel,
+  HardHit_Percent = model_hardhit,
+  Exit_Velocity = model_ev,
+  Launch_Angle = model_la,
+  Sweet_Spot_Percent = model_sweetspot
+)
+
+statcast_model_results <- data.frame(
+  R2 = sapply(
+    statcast_models,
+    function(x) summary(x)$r.squared
+  ),
+  
+  Adjusted_R2 = sapply(
+    statcast_models,
+    function(x) summary(x)$adj.r.squared
+  ),
+  
+  Coefficient = sapply(
+    statcast_models,
+    function(x) coef(x)[2]
+  ),
+  
+  P_Value = sapply(
+    statcast_models,
+    function(x) summary(x)$coefficients[2, 4]
+  )
+)
+
+statcast_model_results
+
+
+# Diagnostic Plots
+
+
+par(mfrow = c(2,2))
+plot(model_xwoba)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_xba)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_xslg)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_xiso)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_barrel)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_hardhit)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_ev)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_la)
+par(mfrow = c(1,1))
+
+
+par(mfrow = c(2,2))
+plot(model_sweetspot)
+par(mfrow = c(1,1))
+```
+
+## Diagnostics
+
+Residual Analysis
+
+The first step in evaluating the strongest simple regression models is to examine the distribution of their residuals. Residuals represent the difference between the observed fWAR value and the value predicted by the model. Residual histograms for the OPS, Off, and xwOBA models are used to determine whether the residuals are generally centered around zero and whether their distributions appear reasonably balanced. This provides an additional assessment of how well the models capture the relationship between each predictor and player value.
+
+The diagnostic plots from the previous sections also provide an initial assessment of the residual patterns for all simple regression models. In particular, the Residuals versus Fitted plots showed generally reasonable patterns without major departures from linearity. Some models displayed gradual changes in residual spread, but these patterns were relatively small and did not indicate a serious violation of the regression assumptions. These results support using the strongest models for additional diagnostic evaluation.
+
+Normality Assessment
+
+Normality is assessed primarily through the residual histograms for the three strongest models, while the Normal Q-Q plots generated in the previous sections provide the initial visual assessment. The residuals should be reasonably centered around zero and approximately symmetric for the normality assumption to be considered appropriate. Because baseball performance data can contain unusually strong or weak player seasons, some deviation from a perfectly normal distribution is expected.
+
+The goal is therefore not to require perfectly normal residuals, but to determine whether there are substantial departures that could affect the usefulness of the regression models. Minor deviations are not considered a major concern for these simple models, particularly given the relatively large sample of 1,377 player-seasons.
+
+Influential Observations
+
+Potentially influential observations are evaluated using Cook's Distance for the OPS, Off, and xwOBA models. Cook's Distance measures how strongly an individual observation can affect the fitted regression model. The plots use the commonly applied 4/n guideline as a reference for identifying observations that may warrant additional attention.
+
+Observations with relatively large Cook's Distance values should not automatically be removed. In this dataset, unusual observations may represent legitimate player seasons, such as elite offensive performances or unusually low-performing seasons. These observations are part of the actual variation in Major League Baseball performance and therefore should generally remain in the analysis unless there is evidence of a data-quality problem. The purpose of this diagnostic is to determine whether any individual player-season has an unusually large influence on the model rather than to remove observations simply because they are extreme.
+
+Heteroskedasticity
+
+Heteroskedasticity is evaluated using the diagnostic plots from the previous sections along with the additional Absolute Residuals versus Fitted Values plots for the OPS, Off, and xwOBA models. These plots examine whether the size of the residuals changes systematically as the model's predicted fWAR increases. A relatively consistent spread suggests that the model has approximately constant variance, while a clear increase or decrease in the spread may indicate heteroskedasticity.
+
+The earlier Scale-Location plots showed gradual changes in residual spread for several models, including the strongest models selected for further evaluation. However, these changes were relatively small and did not appear substantial enough to indicate a major problem with the simple regression models. The additional absolute-residual plots provide another way to evaluate this pattern and will help determine whether unequal variance should be considered when interpreting the results or developing the multiple regression models in the next sections.
+
+```{r}
+###############################################################
+# Diagnostics for the Strongest Simple Models
+###############################################################
+
+
+# Residual Histograms
+
+
+hist(residuals(model_OPS),
+     main = "Residual Distribution - OPS Model",
+     xlab = "Residuals")
+
+hist(residuals(model_off),
+     main = "Residual Distribution - Off Model",
+     xlab = "Residuals")
+
+hist(residuals(model_xwoba),
+     main = "Residual Distribution - xwOBA Model",
+     xlab = "Residuals")
+
+
+# Cook's Distance
+
+
+cook_threshold <- 4 / nrow(hitters)
+
+
+plot(cooks.distance(model_OPS),
+     type = "h",
+     main = "Cook's Distance - OPS Model",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = cook_threshold, lty = 2)
+
+
+plot(cooks.distance(model_off),
+     type = "h",
+     main = "Cook's Distance - Off Model",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = cook_threshold, lty = 2)
+
+
+plot(cooks.distance(model_xwoba),
+     type = "h",
+     main = "Cook's Distance - xwOBA Model",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = cook_threshold, lty = 2)
+```
+
+## Model Comparison
+
+The final stage of the simple linear regression analysis compares the performance of all individual models developed throughout this section. While each model examined the relationship between a single predictor and fWAR, comparing the models collectively provides insight into which statistics are most strongly associated with overall player value. The results also provide a baseline for determining which variables should be considered in the multiple regression models developed later in the project.
+
+Model performance was evaluated using R², adjusted R², RMSE, MAE, and residual standard error. R² and adjusted R² measure how much of the variation in fWAR is explained by each individual predictor, while RMSE, MAE, and residual standard error provide measures of prediction error. Because all models contain only one explanatory variable, adjusted R² produces results very similar to R². Looking at several measures together provides a more complete comparison than relying on a single statistic.
+
+Among the traditional offensive statistics, OPS produced the strongest individual model, with an R² of 0.5724 and an adjusted R² of 0.5721. Runs scored was the next strongest traditional predictor, with an adjusted R² of 0.5236, followed by batting average at 0.3318. Home runs and RBI explained approximately 23.0% and 22.2% of the variation in fWAR, respectively, while stolen bases and walk percentage provided considerably less explanatory power. Strikeout percentage was the weakest traditional model, with an adjusted R² of only 0.0108. All of the traditional predictors were statistically significant, including strikeout percentage, although statistical significance alone does not indicate that a variable provides strong predictive or explanatory power. These results show that a variable can have a statistically significant relationship with fWAR while still explaining relatively little of its overall variation.
+
+The advanced sabermetric models generally performed better than the traditional statistics. Offensive Runs (Off) produced the strongest individual model in this group and was also the strongest model across all three categories, with an R² of 0.7357 and an adjusted R² of 0.7355. Its residual standard error was approximately 1.02 fWAR, which was lower than the corresponding error for the strongest traditional model, OPS. wRC+ and wOBA were also strong individual predictors, with adjusted R² values of 0.6308 and 0.5994, respectively. ISO, BsR, and Def had substantially lower explanatory power when modeled individually. These results suggest that measures designed to capture player contributions more comprehensively can explain substantially more variation in fWAR than many traditional box-score statistics.
+
+The Statcast models provided additional information about the relationship between underlying performance and player value, although they generally did not outperform the strongest traditional and sabermetric models. Expected weighted on-base average (xwOBA) was the strongest Statcast model, with an R² of 0.3505 and an adjusted R² of 0.3501. xSLG and xBA followed with adjusted R² values of 0.2647 and 0.2089, respectively. The direct quality-of-contact measures were weaker individually, with Barrel Percentage, Exit Velocity, Hard-Hit Percentage, and Sweet Spot Percentage explaining relatively smaller portions of the variation in fWAR. Launch Angle was the weakest of the expected-performance measures, with an adjusted R² of only 0.0190. Although these results indicate that Statcast measures are significantly related to player value, the simple models suggest that they do not individually capture as much of the variation in fWAR as the strongest sabermetric measures.
+
+Comparing all three groups directly identifies Off as the strongest individual predictor of fWAR, followed by wRC+, wOBA, OPS, and xwOBA among the stronger individual models. The results show that the advanced sabermetric models generally outperformed the traditional offensive statistics, with several measures providing substantially greater explanatory power. In contrast, the Statcast models generally performed below the strongest traditional and advanced metrics when evaluated individually. This does not mean that Statcast information is unimportant. Instead, it suggests that Statcast variables may provide more value when combined with other measures rather than being used alone to explain overall player value.
+
+The results also demonstrate an important distinction between statistical significance and practical explanatory power. Every predictor examined in these sections had a statistically significant relationship with fWAR, but the amount of variation explained by the models differed substantially. For example, strikeout percentage was statistically significant while explaining only about 1.2% of the variation in fWAR, whereas Off explained approximately 73.6%. Therefore, statistical significance alone is not sufficient for determining which variables are useful predictors of player value.
+
+Overall, the simple regression results provide a strong baseline for the next stage of the project. Off, wRC+, wOBA, OPS, and xwOBA stand out as particularly important candidates for further modeling, while other variables may still provide additional information when combined with stronger predictors. However, no single statistic completely explains player value because fWAR incorporates multiple dimensions of performance, including offense, defense, and baserunning. The next stage therefore moves beyond individual relationships and develops multiple regression models that combine several predictors simultaneously. This will allow the project to determine whether combining traditional statistics, advanced sabermetrics, and Statcast measures can explain fWAR more effectively than any individual statistic alone.
+
+# Introduction to Multiple fWAR Models
+
+The simple linear regression models in the previous sections established which traditional statistics, advanced sabermetric metrics, and Statcast measures have the strongest individual relationships with fWAR. However, these models considered each predictor separately and therefore did not account for the fact that several statistics may measure similar aspects of player performance. For example, offensive metrics such as OPS, wOBA, and wRC+ are related to one another, while Statcast measures such as xwOBA, Barrel%, and Hard-Hit% can also capture overlapping aspects of hitting ability. Because player value is influenced by multiple factors at the same time, evaluating these variables individually does not provide a complete picture of their contributions to fWAR.
+
+This section builds on the results from the simple regression analysis by using multiple linear regression to evaluate several predictors simultaneously. Unlike simple regression, multiple regression estimates the relationship between each predictor and fWAR while controlling for the other variables included in the model. This makes it possible to determine whether a variable that appeared to be a strong predictor on its own continues to provide useful information after other relevant measures of player performance are considered.
+
+The analysis begins by developing separate multiple regression models for traditional statistics, advanced sabermetric metrics, and Statcast measurements. The strongest variables identified from the simple regression models will be used to guide the selection of predictors rather than including every available statistic automatically. The analysis will then combine variables from these groups to determine whether a broader set of measures can improve the explanation and prediction of fWAR.
+
+As the models become more advanced, additional statistical issues will also be examined. Multicollinearity diagnostics will be used to determine whether predictors contain excessive overlap, while regression diagnostics will evaluate residual behavior and other model assumptions. Nonlinear effects will then be considered for variables where a straight-line relationship may not adequately describe the relationship with fWAR. Interaction effects will also be tested to determine whether the relationship between one predictor and fWAR changes depending on the level or category of another predictor.
+
+The overall goal of this section is to move beyond the individual relationships identified in the previous sections and develop a more complete model of player value. By comparing increasingly refined multiple regression models, the analysis will identify which combination of statistics provides the strongest explanation of fWAR while balancing predictive performance, interpretability, and the assumptions of the regression framework. The final models from this section will provide the foundation for the later salary analysis and the broader evaluation of player value.
+
+## Tradition Multiple Regression Models
+
+The traditional multiple regression model was developed to examine whether commonly used offensive statistics collectively explain variation in fWAR when the effects of the other predictors are controlled for. The model included batting average (BA), home runs (HR), runs batted in (RBI), runs scored (R), stolen bases (SB), on-base plus slugging (OPS), walk percentage (BB%), and strikeout percentage (K%). Unlike the simple regression models in the previous sections, this approach evaluates the predictors simultaneously, allowing the results to show which statistics provide additional explanatory value after accounting for the other traditional offensive measures.
+
+The overall model was statistically significant, with an F-statistic of 418.1 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.7097 and an adjusted R² of 0.7080, indicating that approximately 71.0% of the variation in fWAR was explained by the eight traditional offensive predictors included in the model. The residual standard error was 1.072, while the RMSE and MAE were 1.068 and 0.841, respectively. Compared with the individual simple regression models from a previous section, the multiple regression model provides substantially greater explanatory power, demonstrating the benefit of considering several offensive statistics simultaneously.
+
+Several predictors were statistically significant after controlling for the other variables. Runs scored had a positive coefficient of 0.0292 (p < 2.2 × 10⁻¹⁶), indicating that higher run totals were associated with higher fWAR when the other predictors were held constant. Stolen bases were also significant, with a coefficient of 0.0424 (p < 2.2 × 10⁻¹⁶). OPS had a positive coefficient of 14.01 (p < 2.2 × 10⁻¹⁶), making it one of the strongest significant predictors in the model. Strikeout percentage was statistically significant as well, with a coefficient of -0.0231 (p = 0.00101), indicating a negative relationship with fWAR after controlling for the other traditional statistics.
+
+In contrast, batting average, home runs, RBI, and walk percentage were not statistically significant in the multiple regression model. BA had a p-value of 0.778, HR had a p-value of 0.152, RBI had a p-value of 0.908, and BB% had a p-value of 0.440. This differs substantially from the simple regression results, where all eight traditional statistics were statistically significant. The change suggests that some of the relationships observed in the simple models overlap with information captured by other offensive statistics. In particular, the loss of significance for BA, HR, and RBI indicates that their individual relationships with fWAR do not necessarily represent independent contributions once other traditional offensive measures are included.
+
+The ANOVA results provide additional information about the sequential contribution of each predictor. All variables except BB% were statistically significant in the sequential ANOVA table. BA, HR, RBI, R, SB, and OPS all produced statistically significant F-tests, while K% also remained significant. BB% was not statistically significant in the ANOVA table (p = 0.267). However, the ANOVA results should be interpreted alongside the regression coefficient results because the sequential ANOVA results depend on the order in which the predictors were entered into the model. Therefore, the coefficient significance tests are more appropriate for determining whether an individual predictor provides an independent contribution after accounting for the other variables.
+
+Overall, the traditional multiple regression model provides a strong baseline for the remainder of the multiple regression analysis. Its adjusted R² of 0.708 indicates that traditional offensive statistics can explain a substantial portion of the variation in fWAR when considered together. However, the results also demonstrate that several statistics that appear strongly related to fWAR individually do not remain significant when other correlated offensive measures are included. This highlights the importance of evaluating predictors simultaneously rather than relying only on simple regression relationships. The next section will examine whether advanced sabermetric measures can improve upon this traditional multiple regression baseline.
+
+```{r}
+###############################################################
+# Traditional Multiple Regression
+###############################################################
+
+
+
+traditional_model <- lm(
+  WAR ~ BA + HR + RBI + R + SB + OPS +
+    BB_Percent + K_Percent,
+  data = hitters
+)
+
+
+# Regression Summary
+
+
+summary(traditional_model)
+
+
+# 95% Confidence Intervals
+
+
+confint(traditional_model)
+
+
+# ANOVA Table
+
+
+anova(traditional_model)
+
+
+# Model Performance
+
+
+traditional_model_results <- data.frame(
+  
+  R2 = summary(traditional_model)$r.squared,
+  
+  Adjusted_R2 = summary(traditional_model)$adj.r.squared,
+  
+  RSE = summary(traditional_model)$sigma,
+  
+  RMSE = sqrt(mean(residuals(traditional_model)^2)),
+  
+  MAE = mean(abs(residuals(traditional_model)))
+)
+
+traditional_model_results
+```
+
+## Sabermetric Multiple Regression Models
+
+The sabermetric multiple regression model was developed to examine whether advanced measures of player performance collectively explain variation in fWAR when the effects of the other predictors are controlled for. The model included weighted runs created plus (wRC+), Offensive Runs (Off), Baserunning Runs (BsR), Defensive Runs (Def), and player Age. Unlike the simple regression models in a previous section, this approach evaluates the predictors simultaneously, allowing the results to show which advanced metrics provide additional explanatory value after accounting for the other sabermetric measures included in the model.
+
+The overall model was statistically significant, with an F-statistic of 26,430 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.9897 and an adjusted R² of 0.9897, indicating that approximately 99.0% of the variation in fWAR was explained by the five predictors included in the model. The residual standard error was 0.201, while the RMSE and MAE were 0.201 and 0.164, respectively. Compared with the traditional multiple regression model from the section before, which produced an adjusted R² of 0.7080 and an RMSE of 1.068, the sabermetric model provides substantially greater explanatory power and considerably lower prediction error. This indicates that the advanced measures included in the model capture a much larger portion of the variation in fWAR within the dataset.
+
+Several predictors were statistically significant after controlling for the other variables. Offensive Runs had a positive coefficient of 0.1387 (p < 2.2 × 10⁻¹⁶), indicating that higher offensive run values were associated with higher fWAR when the other predictors were held constant. Defensive Runs had an even stronger positive coefficient of 0.1007 (p < 2.2 × 10⁻¹⁶), demonstrating a strong positive relationship with fWAR after accounting for the other variables. The large t-statistic for Def of 167.00 also indicates a very strong statistical relationship within the model.
+
+In contrast, wRC+ and BsR produced negative coefficients despite both being statistically significant. wRC+ had a coefficient of -0.0244 (p < 2.2 × 10⁻¹⁶), while BsR had a coefficient of -0.0290 (p < 2.2 × 10⁻¹⁶). These negative coefficients should not be interpreted as meaning that higher wRC+ or better baserunning performance decreases fWAR. Instead, they represent the estimated partial relationship between each variable and fWAR after controlling for Off, BsR, Def, Age, and the other predictors in the model. Because these sabermetric measures are closely related to overall player value and to one another, their individual coefficients can change substantially when the variables are evaluated simultaneously.
+
+Player Age was not statistically significant in the model. Age had a coefficient of approximately 0.00009 and a p-value of 0.955, indicating essentially no additional relationship with fWAR after the other sabermetric variables were included. The 95% confidence interval for Age ranged from approximately -0.0030 to 0.0032, which includes zero. This further supports the conclusion that Age did not provide meaningful additional explanatory information in this particular model.
+
+The ANOVA results provide additional information about the sequential contribution of each predictor. wRC+, Off, BsR, and Def were all statistically significant in the sequential ANOVA table, with each producing a p-value below 2.2 × 10⁻¹⁶. wRC+ accounted for the largest sequential sum of squares at 3,417.2, followed by Def at 1,163.2 and Off at 747.8. BsR contributed an additional 31.0 in sequential sum of squares. Age, however, contributed essentially no additional variation, with a sum of squares of approximately 0.0 and a p-value of 0.9552. As with the traditional model, these ANOVA results should be interpreted alongside the regression coefficient results because sequential ANOVA depends on the order in which the predictors are entered into the model. Therefore, the coefficient significance tests are more appropriate for determining whether an individual predictor provides an independent contribution after accounting for the other variables.
+
+The extremely high R² of 0.9897 should also be interpreted carefully. The sabermetric variables used in this model are closely related to the components used to calculate fWAR, particularly Off, BsR, and Def. As a result, the model is expected to explain a very large proportion of the variation in fWAR. Therefore, the results demonstrate that these advanced measures collectively capture much of the same information represented by fWAR, rather than necessarily showing that they can independently predict future player performance at the same level of accuracy. This distinction is important when interpreting the model as part of the broader analysis.
+
+Overall, the sabermetric multiple regression model provides a substantially stronger fit than the traditional multiple regression model developed in the section before. Its adjusted R² of 0.9897 and RMSE of 0.201 demonstrate that the combination of wRC+, Off, BsR, and Def explains nearly all of the observed variation in fWAR within the dataset. At the same time, the lack of significance for Age and the changes in the signs of the wRC+ and BsR coefficients demonstrate why multiple regression is useful for evaluating predictors simultaneously. The strong relationships among these variables also suggest that multicollinearity will need to be examined later in the section. The next section will incorporate Statcast measures into a multiple regression framework to determine whether underlying measures of player skill provide additional explanatory value beyond the traditional and sabermetric models.
+
+```{r}
+###############################################################
+# Sabermetric Multiple Regression
+###############################################################
+
+sabermetric_model <- lm(
+  WAR ~ wRC_plus + Off + BsR + Def + Age,
+  data = hitters
+)
+
+
+# Regression Summary
+
+
+summary(sabermetric_model)
+
+
+
+# 95% Confidence Intervals
+
+
+confint(sabermetric_model)
+
+
+# ANOVA Table
+
+
+anova(sabermetric_model)
+
+
+# Model Performance
+
+
+summary(sabermetric_model)$r.squared
+
+summary(sabermetric_model)$adj.r.squared
+
+summary(sabermetric_model)$sigma
+
+
+# Root Mean Squared Error (RMSE)
+
+
+sabermetric_predictions <- predict(sabermetric_model)
+
+sabermetric_rmse <- sqrt(
+  mean((hitters$WAR - sabermetric_predictions)^2)
+)
+
+sabermetric_rmse
+
+
+# Mean Absolute Error (MAE)
+
+
+sabermetric_mae <- mean(
+  abs(hitters$WAR - sabermetric_predictions)
+)
+
+sabermetric_mae
+
+
+# Model Performance Summary
+
+
+sabermetric_model_results <- data.frame(
+  
+  R2 = summary(sabermetric_model)$r.squared,
+  
+  Adjusted_R2 = summary(sabermetric_model)$adj.r.squared,
+  
+  RSE = summary(sabermetric_model)$sigma,
+  
+  RMSE = sabermetric_rmse,
+  
+  MAE = sabermetric_mae
+)
+
+sabermetric_model_results
+
+
+# Predicted WAR Values
+
+
+head(sabermetric_predictions)
+```
+
+## Statcast Multiple Regression Models
+
+The Statcast multiple regression model was developed to examine whether several Statcast-based measures of contact quality and expected offensive performance collectively explain variation in fWAR. The model included expected weighted on-base average (xwOBA), Barrel Percentage, Hard-Hit Percentage, average exit velocity, Sweet Spot Percentage, and average launch angle. Unlike the simple Statcast regression models in a previous section, this model evaluates these measures simultaneously, allowing the results to show which Statcast variables remain significant after controlling for the other Statcast measures.
+
+The overall model was statistically significant, with an F-statistic of 143.1 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.3853 and an adjusted R² of 0.3826, indicating that approximately 38.5% of the variation in fWAR was explained by the six Statcast predictors included in the model. The residual standard error was 1.559, while the RMSE and MAE were 1.555 and 1.236, respectively. Although this model explains substantially more variation than many of the individual Statcast models from a previous section, its overall explanatory power remains below the traditional and sabermetric multiple regression models developed earlier in this section.
+
+The strongest predictor in the model was xwOBA. It had a positive coefficient of 47.21 (p < 2.2 × 10⁻¹⁶), indicating that higher expected wOBA was associated with higher fWAR when the other Statcast variables were held constant. The 95% confidence interval for the xwOBA coefficient ranged from 43.17 to 51.24, providing strong evidence of a positive relationship. The large coefficient and extremely small p-value demonstrate that xwOBA provides the strongest independent contribution to explaining fWAR among the Statcast variables included in this model.
+
+Several other Statcast variables were also statistically significant. Barrel Percentage had a coefficient of -0.0788 (p = 8.90 × 10⁻⁵), while Hard-Hit Percentage had a coefficient of -0.0439 (p = 0.00770). Sweet Spot Percentage was also significant, with a coefficient of -0.0583 (p = 6.11 × 10⁻⁵). Average launch angle had a positive coefficient of 0.0469 (p = 0.000146). Although these variables were statistically significant, their negative coefficients for Barrel Percentage, Hard-Hit Percentage, and Sweet Spot Percentage are different from the positive relationships observed in their individual simple regression models. This change suggests that these variables share substantial information with xwOBA and the other Statcast measures. Once the predictors are considered simultaneously, their coefficients represent their relationship with fWAR after controlling for the other variables rather than their overall individual association with WAR.
+
+Average exit velocity was the only Statcast predictor that was not statistically significant in the multiple regression model. Its coefficient was 0.0600 with a p-value of 0.300, and its 95% confidence interval ranged from approximately -0.054 to 0.174. Because this interval includes zero, there is not sufficient evidence that average exit velocity provides an independent contribution to fWAR after accounting for the other Statcast measures. This differs from the simple regression model in a previous section, where exit velocity was statistically significant, further demonstrating how relationships between predictors can change when correlated variables are considered simultaneously.
+
+The ANOVA results provide additional information about the sequential contribution of each predictor to the model. xwOBA produced the largest sequential contribution, with an F-statistic of 781.31 and a p-value below 2.2 × 10⁻¹⁶. Barrel Percentage, Hard-Hit Percentage, Sweet Spot Percentage, and Launch Angle were also statistically significant in the sequential ANOVA table. Average exit velocity was not statistically significant in the ANOVA results, with a p-value of 0.165. As with the traditional and sabermetric models, the sequential ANOVA results should be interpreted alongside the regression coefficient tests because the ANOVA results depend on the order in which the predictors are entered into the model. The coefficient significance tests are therefore more appropriate for determining whether a predictor provides an independent contribution after accounting for the other variables.
+
+Overall, the Statcast multiple regression model provides a useful comparison with the traditional and sabermetric multiple regression models. Its adjusted R² of 0.3826 indicates that the selected Statcast variables explain a meaningful portion of the variation in fWAR, but the model does not outperform the traditional model with an adjusted R² of 0.7080 or the sabermetric model with an adjusted R² of 0.9897. The results also demonstrate the importance of considering Statcast variables together rather than relying on their individual simple regression relationships. In particular, xwOBA remained a very strong predictor after controlling for the other Statcast measures, while exit velocity lost statistical significance. The next stage of the analysis will combine variables from the strongest models to determine whether traditional, sabermetric, and Statcast measures can provide additional explanatory power when incorporated into a unified model.
+
+```{r}
+###############################################################
+# Statcast Multiple Regression
+###############################################################
+
+
+statcast_model <- lm(
+  WAR ~ xwOBA + Barrel_Percent + HardHit_Percent +
+    EV_Avg + SweetSpot_Percent + LaunchAngle_Avg,
+  data = hitters
+)
+
+
+
+# Regression Summary
+
+
+summary(statcast_model)
+
+
+# 95% Confidence Intervals
+
+
+confint(statcast_model)
+
+
+# ANOVA Table
+
+
+anova(statcast_model)
+
+
+# Model Performance
+
+
+summary(statcast_model)$r.squared
+
+summary(statcast_model)$adj.r.squared
+
+summary(statcast_model)$sigma
+
+
+
+# Root Mean Squared Error (RMSE)
+
+
+statcast_predictions <- predict(statcast_model)
+
+statcast_rmse <- sqrt(
+  mean((hitters$WAR - statcast_predictions)^2)
+)
+
+statcast_rmse
+
+
+# Mean Absolute Error (MAE)
+
+
+statcast_mae <- mean(
+  abs(hitters$WAR - statcast_predictions)
+)
+
+statcast_mae
+
+
+
+# Model Performance Summary
+
+
+statcast_model_results <- data.frame(
+  
+  R2 = summary(statcast_model)$r.squared,
+  
+  Adjusted_R2 = summary(statcast_model)$adj.r.squared,
+  
+  RSE = summary(statcast_model)$sigma,
+  
+  RMSE = statcast_rmse,
+  
+  MAE = statcast_mae
+)
+
+statcast_model_results
+
+
+
+# Predicted WAR Values
+
+
+head(statcast_predictions)
+```
+
+## Combined Multiple Regression Model
+
+The combined multiple regression model was developed to integrate the strongest variables identified from the traditional, advanced sabermetric, and Statcast multiple regression models. The final model included OPS, runs scored (R), stolen bases (SB), strikeout percentage (K%), weighted runs created plus (wRC+), offensive runs (Off), baserunning runs (BsR), defensive runs (Def), and expected weighted on-base average (xwOBA). This model allows variables from the three previous modeling groups to be evaluated simultaneously and provides a more comprehensive assessment of the factors associated with fWAR.
+
+The overall combined model was statistically significant, with an F-statistic of 24,560 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.9939 and an adjusted R² of 0.9938, indicating that approximately 99.4% of the variation in fWAR was explained by the nine predictors included in the model. The residual standard error was only 0.156, while the RMSE and MAE were 0.155 and 0.125, respectively. These values represent a substantial improvement over the traditional multiple regression model, which had an adjusted R² of 0.708, and the Statcast multiple regression model, which had an adjusted R² of 0.383. The combined model also improved upon the sabermetric multiple regression model, which had an adjusted R² of approximately 0.990. This indicates that combining variables from the different modeling approaches provides extremely strong explanatory power for fWAR.
+
+Several variables remained statistically significant after controlling for the other predictors. Runs scored had a positive coefficient of 0.0112 (p < 2.2 × 10⁻¹⁶), indicating that higher run totals were associated with higher fWAR when the other variables were held constant. Strikeout percentage was also significant, with a negative coefficient of -0.00246 (p = 0.00203), suggesting that higher strikeout rates were associated with lower fWAR after accounting for the other variables. Offensive Runs (Off) had a positive coefficient of 0.1149 (p < 2.2 × 10⁻¹⁶), while Defensive Runs (Def) had a positive coefficient of 0.0998 (p < 2.2 × 10⁻¹⁶). These results indicate that offensive and defensive contributions remain important components of overall player value even after the other variables are included in the model. BsR was statistically significant as well, with a coefficient of -0.0246 (p < 2.2 × 10⁻¹⁶).
+
+OPS was also statistically significant, although its coefficient was negative (-2.6052, p < 2.2 × 10⁻¹⁶). This negative coefficient should not be interpreted as meaning that higher OPS causes lower WAR. Instead, OPS overlaps substantially with other offensive measures included in the model, particularly wRC+, Off, and xwOBA. Once those related variables are controlled for, the coefficient for OPS represents its remaining partial relationship with WAR rather than its overall positive relationship observed in simple regression. This is an important indication of the effects of correlation among predictors in a combined model.
+
+In contrast, SB, wRC+, and xwOBA were not statistically significant in the final regression model. SB had a p-value of 0.334, wRC+ had a p-value of 0.123, and xwOBA had a p-value of 0.477. The lack of significance for these variables does not mean that they are unrelated to WAR. Instead, their information may already be captured by other variables in the model. This is particularly important for wRC+ and xwOBA because both measure aspects of offensive quality that overlap with OPS and Off. The ANOVA table reinforces this issue: because predictors are entered sequentially, every variable except xwOBA is statistically significant in the sequential ANOVA results. However, the coefficient p-values are more appropriate for determining whether each predictor provides an independent contribution after accounting for all other variables.
+
+The actual-versus-predicted WAR plot provides additional evidence of the model's strong performance. The predicted values are closely aligned with the actual WAR values, with the observations appearing very close to the 45-degree reference line. This indicates that the model is able to reproduce the observed WAR values with relatively little prediction error. The low RMSE and MAE further support this result, with an average absolute prediction error of only about 0.125 WAR.
+
+Overall, the combined model produced the strongest statistical performance of the multiple regression models evaluated so far. Its adjusted R² of 0.9938 and very low prediction errors demonstrate that the selected variables collectively explain nearly all of the variation in fWAR within the dataset. However, the extremely high explanatory power should also be interpreted carefully because several of the predictors, particularly Off and Def, are components or closely related measures of the WAR calculation itself. Therefore, the model demonstrates a very strong ability to explain fWAR, but this does not necessarily mean that it would perform equally well when predicting WAR for entirely new players or seasons. The results also highlight the importance of examining multicollinearity before interpreting individual coefficients. The next sections will therefore evaluate the relationships among the predictors and conduct additional diagnostic analyses to determine whether the combined model satisfies the assumptions of multiple linear regression.
+
+```{r}
+###############################################################
+# Combined Multiple Regression Model
+###############################################################
+
+
+combined_model <- lm(
+  WAR ~ OPS + R + SB + K_Percent +
+    wRC_plus + Off + BsR + Def + xwOBA,
+  data = hitters
+)
+
+
+
+# Regression Summary
+
+
+summary(combined_model)
+
+
+
+# 95% Confidence Intervals
+
+
+confint(combined_model)
+
+
+
+# ANOVA Table
+
+
+anova(combined_model)
+
+
+
+# Model Performance
+
+
+summary(combined_model)$r.squared
+
+summary(combined_model)$adj.r.squared
+
+summary(combined_model)$sigma
+
+
+
+# Root Mean Squared Error (RMSE)
+
+
+combined_predictions <- predict(combined_model)
+
+combined_rmse <- sqrt(
+  mean((hitters$WAR - combined_predictions)^2)
+)
+
+combined_rmse
+
+
+
+# Mean Absolute Error (MAE)
+
+
+combined_mae <- mean(
+  abs(hitters$WAR - combined_predictions)
+)
+
+combined_mae
+
+
+
+# Model Performance Summary
+
+
+combined_model_results <- data.frame(
+  
+  R2 = summary(combined_model)$r.squared,
+  
+  Adjusted_R2 = summary(combined_model)$adj.r.squared,
+  
+  RSE = summary(combined_model)$sigma,
+  
+  RMSE = combined_rmse,
+  
+  MAE = combined_mae
+)
+
+combined_model_results
+
+
+
+# Predicted WAR Values
+
+
+head(combined_predictions)
+
+
+
+# Actual vs Predicted WAR
+
+
+plot(
+  hitters$WAR,
+  combined_predictions,
+  main = "Actual vs Predicted WAR - Combined Model",
+  xlab = "Actual WAR",
+  ylab = "Predicted WAR"
+)
+
+abline(0, 1, lwd = 2)
+```
+
+## Multicollinearity Analysis
+
+The multicollinearity analysis was conducted to determine whether the predictors in the combined multiple regression model were highly correlated with one another. This is particularly important because the model combines traditional offensive statistics, advanced sabermetric measures, and Statcast metrics, several of which measure similar aspects of offensive performance. Variance Inflation Factor (VIF) values and a correlation matrix were used to evaluate the extent to which multicollinearity may affect the interpretation of the regression coefficients.
+
+The VIF results indicate that several predictors have substantial multicollinearity. The most serious concerns were observed for Offensive Runs (Off), which had a VIF of 93.96, and weighted runs created plus (wRC+), which had a VIF of 83.73. OPS also showed serious multicollinearity with a VIF of 10.94. These values are well above the commonly used threshold of 10 and indicate that these variables contain substantial overlapping information with other predictors in the combined model. BsR had a VIF of 5.10, indicating moderate multicollinearity, while xwOBA had a VIF of 4.10 and remained below the threshold of 5. Runs (R) and stolen bases (SB) had VIF values of 2.99 and 2.42, respectively, indicating relatively low levels of multicollinearity. K% and Def had the lowest VIF values, at 1.05 and 1.25, respectively.
+
+The correlation matrix helps explain the high VIF values observed for the offensive variables. OPS was strongly correlated with wRC+ (r = 0.944) and Off (r = 0.929), while it also had a strong correlation with xwOBA (r = 0.837). The relationship between wRC+ and Off was particularly strong, with a correlation of 0.974. Off was also strongly correlated with xwOBA (r = 0.803). These relationships demonstrate that the three measures capture considerable amounts of overlapping offensive information. The strong correlations explain why OPS, wRC+, and Off produced very large VIF values when they were included simultaneously in the combined model.
+
+Additional relationships were observed among other predictors. Stolen bases and BsR had a correlation of 0.748, indicating a strong relationship between stolen-base production and overall baserunning value. Runs also had moderate-to-strong correlations with Off (r = 0.740) and OPS (r = 0.688). However, K% had very weak correlations with nearly every other predictor, suggesting that it provides information that is relatively distinct from the other variables. Defensive Runs also showed generally weak correlations with the offensive predictors, although it had a moderate relationship with BsR (r = 0.348).
+
+The scatterplot matrix provides a visual representation of these relationships and supports the correlation results. The strongest linear relationships are concentrated among OPS, wRC+, Off, and xwOBA, while the other predictors generally show weaker relationships. This pattern is consistent with the VIF results and indicates that the primary source of multicollinearity in the combined model comes from the overlapping offensive measures rather than from all predictors equally.
+
+Overall, the multicollinearity analysis demonstrates that the combined model contains substantial redundancy among several of its offensive predictors. In particular, the extremely high VIF values for Off and wRC+, along with the high VIF for OPS, indicate that their individual regression coefficients should be interpreted cautiously. This also helps explain why some variables that were statistically significant in their individual or smaller multiple regression models became insignificant in the combined model. When highly correlated predictors are included simultaneously, they compete to explain the same variation in WAR, making it more difficult to isolate the independent contribution of each variable.
+
+However, these results do not necessarily mean that the highly correlated variables should immediately be removed. The purpose of the combined model was to determine how the strongest predictors from the previous sections perform together, and the high multicollinearity is itself an important finding. Additionally, Off, BsR, and Def are closely related to the construction of WAR, which contributes to the extremely high explanatory power observed in the combined model. Therefore, the results should be interpreted as demonstrating strong explanatory relationships rather than establishing that each predictor independently causes changes in WAR.
+
+The findings from this section indicate that multicollinearity is an important limitation of the current combined model. The next step is therefore to evaluate the model's regression assumptions through residual diagnostics, including residual behavior, normality, influential observations, and heteroskedasticity. These diagnostics will help determine whether the combined model provides an appropriate statistical representation of the data before nonlinear and interaction effects are considered.
+
+```{r}
+###############################################################
+# Multicollinearity
+###############################################################
+
+
+# Variance Inflation Factor (VIF)
+
+
+library(car)
+
+vif_values <- vif(combined_model)
+
+vif_values
+
+
+
+# VIF Summary Table
+
+
+vif_results <- data.frame(
+  
+  Predictor = names(vif_values),
+  
+  VIF = as.numeric(vif_values)
+)
+
+vif_results
+
+
+# Rank Predictors by VIF
+
+
+vif_results[
+  order(-vif_results$VIF),
+]
+
+
+###############################################################
+# Correlation Matrix
+###############################################################
+
+
+correlation_variables <- hitters[, c(
+  "OPS",
+  "R",
+  "SB",
+  "K_Percent",
+  "wRC_plus",
+  "Off",
+  "BsR",
+  "Def",
+  "xwOBA"
+)]
+
+
+
+# Calculate the Pearson correlation matrix
+
+
+correlation_matrix <- cor(
+  correlation_variables,
+  use = "complete.obs"
+)
+
+correlation_matrix
+
+
+# Rounded Correlation Matrix
+
+
+round(correlation_matrix, 3)
+
+
+###############################################################
+# Scatterplot Matrix
+###############################################################
+
+
+pairs(
+  correlation_variables,
+  main = "Scatterplot Matrix of Combined Model Predictors"
+)
+
+
+###############################################################
+# Identify Strong Predictor Correlations
+###############################################################
+
+
+strong_correlations <- correlation_matrix
+
+strong_correlations[
+  abs(strong_correlations) < 0.70
+] <- NA
+
+strong_correlations
+
+
+###############################################################
+# Multicollinearity Summary
+###############################################################
+
+
+max_vif <- max(vif_values)
+
+max_vif
+
+
+vif_above_5 <- vif_results[
+  vif_results$VIF > 5,
+]
+
+vif_above_5
+
+
+vif_above_10 <- vif_results[
+  vif_results$VIF > 10,
+]
+
+vif_above_10
+```
+
+## Diagnostics
+
+The diagnostic analysis was conducted to evaluate whether the combined multiple regression model provides a reasonable fit and whether any individual observations have an unusually large effect on the results. The analysis focused on influential observations, leverage, standardized residuals, and the overall distribution of the residuals. Because the combined model contains several predictors that are strongly related to WAR, these diagnostics are particularly important for determining whether the extremely high model fit is being driven by a small number of observations.
+
+The Cook's Distance results indicate that several observations have greater influence on the fitted model than the majority of observations. The ten largest Cook's Distance values ranged from approximately 0.0071 to 0.0189, with observation 1294 having the largest value of 0.0189, followed by observations 1119 and 1248 with values of 0.0179 and 0.0142, respectively. Although these observations are more influential than most of the data, the Cook's Distance values are still relatively small in absolute terms. The Cook's Distance plot shows that most observations are clustered close to zero, while a smaller number extend noticeably higher. This suggests that there are some potentially influential player seasons, but there is not evidence that a single observation completely determines the regression results.
+
+The leverage analysis identified several observations with unusually high leverage. The ten largest leverage values ranged from approximately 0.0247 to 0.0353, with observation 1157 having the highest leverage value at 0.0353. Observations 191 and 1294 followed with leverage values of approximately 0.0302 and 0.0269. High leverage indicates that these observations have predictor combinations that are relatively unusual compared with the rest of the dataset. However, high leverage by itself does not necessarily mean that an observation is problematic. An observation becomes particularly concerning when high leverage is combined with a large residual or high Cook's Distance.
+
+The Residuals versus Leverage plot provides a useful way to examine these two characteristics simultaneously. Several observations are located farther from the main cluster of observations, including observations 1248, 1294, and 1119, which are specifically labeled on the plot. Observation 1294 is particularly notable because it appears among the largest Cook's Distance values, has relatively high leverage, and also has a large positive standardized residual. This makes it one of the observations that should receive the most attention when evaluating the combined model. However, because these observations represent actual MLB player seasons, they should not automatically be removed from the dataset. Exceptional player performances can naturally produce unusual combinations of offensive, defensive, and playing-time statistics.
+
+The standardized residuals provide additional information about observations that the model predicts relatively poorly. The ten largest absolute standardized residuals ranged from approximately 2.96 to 3.93. Observation 851 had the largest standardized residual at approximately 3.93, followed by observations 407 and 116 with values of approximately 3.44 and 3.29. Observation 1119 also appeared among the largest standardized residuals, with a value of approximately 3.23. These results indicate that several player seasons have residuals that are noticeably larger than those of the typical observation. The largest standardized residual was positive, meaning that the model substantially underestimated WAR for observation 851 relative to its fitted value.
+
+The overall residual summary also shows that the residuals are centered very close to zero. The median residual was approximately -0.0283 and the mean was effectively zero, which is expected for an ordinary least squares regression model. The first and third quartiles were approximately -0.595 and 0.562, respectively, while the residuals ranged from -3.04 to 3.48. This indicates that most residuals are relatively small, although a limited number of observations have substantially larger prediction errors.
+
+Overall, the diagnostic results indicate that the combined model contains several observations with relatively high leverage, larger residuals, or greater influence than the typical observation. Observations such as 1294, 1119, and 1248 are particularly noteworthy because they appear in multiple diagnostic measures. Nevertheless, the diagnostics do not provide a clear reason to remove these observations. Since the dataset consists of actual MLB player seasons, unusual observations may represent legitimate exceptional performances rather than errors in the data. Therefore, these observations will be retained while being recognized as potential influential cases when interpreting the combined model.
+
+The diagnostic analysis also reinforces the importance of examining model assumptions rather than relying solely on the combined model's extremely high R² and low prediction error. The combined model provides a very strong statistical fit, but the presence of several high-leverage and relatively large-residual observations should be considered when interpreting its coefficients and when developing the nonlinear and interaction models that follow.
+
+```{r}
+###############################################################
+# Multiple Regression Diagnostics
+###############################################################
+
+
+###############################################################
+# Influential Observations
+###############################################################
+
+
+# Cook's Distance Plot
+
+
+plot(cooks.distance(combined_model),
+     type = "h",
+     main = "Cook's Distance - Combined Model",
+     xlab = "Observation",
+     ylab = "Cook's Distance")
+
+abline(h = 4 / nrow(hitters), lty = 2)
+
+
+
+# Largest Cook's Distance Values
+
+
+sort(cooks.distance(combined_model),
+     decreasing = TRUE)[1:10]
+
+
+###############################################################
+# Leverage Values
+###############################################################
+
+
+plot(hatvalues(combined_model),
+     type = "h",
+     main = "Leverage Values - Combined Model",
+     xlab = "Observation",
+     ylab = "Leverage")
+
+
+
+# Largest Leverage Values
+
+
+sort(hatvalues(combined_model),
+     decreasing = TRUE)[1:10]
+
+
+###############################################################
+# Residuals vs Leverage
+###############################################################
+
+
+plot(combined_model, which = 5)
+
+
+###############################################################
+# Standardized Residuals
+###############################################################
+
+
+sort(abs(rstandard(combined_model)),
+     decreasing = TRUE)[1:10]
+
+
+###############################################################
+# Residual Summary Statistics
+###############################################################
+
+
+summary(residuals(combined_model))
+```
+
+## Nonlinear Effects
+
+The nonlinear regression model was developed to determine whether player age has a nonlinear relationship with WAR after accounting for the predictors included in the combined model. The model retained OPS, runs scored (R), stolen bases (SB), strikeout percentage (K%), weighted runs created plus (wRC+), Offensive Runs Above Average (Off), Baserunning Runs (BsR), Defensive Runs Above Average (Def), and expected weighted on-base average (xwOBA), while adding both Age and Age². Including the squared age term allows the relationship between age and WAR to follow a curved pattern rather than assuming that the effect of age remains constant across all player ages.
+
+The overall nonlinear model was statistically significant, with an F-statistic of approximately 20,090 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.9939 and an adjusted R² of 0.9938, indicating that approximately 99.4% of the variation in WAR was explained by the predictors included in the model. The residual standard error was 0.1561, while the RMSE and MAE were 0.1554 and 0.1245, respectively. These values were extremely similar to those of the combined linear model, which had an adjusted R² of 0.9938, an RMSE of 0.1555, and an MAE of 0.1246. Therefore, adding the nonlinear age terms produced virtually no improvement in overall predictive performance.
+
+The coefficient results show that the primary predictors from the combined model remained largely consistent after Age and Age² were added. Runs scored remained statistically significant with a positive coefficient of 0.01125 (p < 2.2 × 10⁻¹⁶), while K% remained significant with a negative coefficient of -0.00264 (p = 0.00111). Off remained one of the strongest significant predictors, with a coefficient of 0.1148 (p < 2.2 × 10⁻¹⁶), and BsR remained statistically significant with a negative coefficient of -0.02474 (p < 2.2 × 10⁻¹⁶). Def continued to have an extremely strong positive relationship with WAR, with a coefficient of 0.09971 (p < 2.2 × 10⁻¹⁶). OPS also remained statistically significant, although its coefficient was negative at -2.6115 (p < 2.2 × 10⁻¹⁶).
+
+Several variables did not remain statistically significant after accounting for the other predictors. SB had a p-value of 0.360, wRC+ had a p-value of 0.134, and xwOBA had a p-value of 0.559. These results are consistent with the combined model, where these variables were also not statistically significant. This suggests that much of the information contained in these variables overlaps with other predictors already included in the model.
+
+Most importantly, neither Age nor Age² was statistically significant. Age had an estimated coefficient of 0.00548 with a p-value of 0.692, while Age² had an estimated coefficient of -0.000121 with a p-value of 0.611. The confidence interval for Age ranged from approximately -0.0217 to 0.0326, while the confidence interval for Age² ranged from approximately -0.000586 to 0.000344. Because the confidence interval for the squared term includes zero and its p-value is well above 0.05, there is little evidence that a quadratic age effect contributes additional explanatory information after the other variables are controlled for.
+
+The sequential ANOVA results provide the same general conclusion. Age contributed a relatively small amount of additional variation, with an F-statistic of 1.536 and a p-value of 0.216. Age² contributed even less, with an F-statistic of only 0.259 and a p-value of 0.611. Therefore, neither age term provided statistically significant additional explanatory power in the nonlinear model. The results indicate that the strong predictive performance of the combined model does not depend on including a nonlinear aging effect.
+
+The model comparison statistics further support this conclusion. The nonlinear model had an AIC of -1193.959 and a BIC of -1126.000, compared with an AIC of 3602.419 and a BIC of 3675.606 for the earlier model used in the comparison. However, this particular AIC/BIC comparison is between different predictor sets rather than simply the combined linear model and the same model with Age² added, so the more relevant comparison is the nearly identical adjusted R², RMSE, and MAE between the combined model and nonlinear model. The nonlinear model's adjusted R² increased only from approximately 0.9938 to 0.9938, while RMSE decreased from 0.1555 to 0.1554 and MAE decreased from 0.1246 to 0.1245. These differences are extremely small and do not provide meaningful evidence that the nonlinear terms improve predictive performance.
+
+The age-versus-WAR visualization also provides a useful graphical representation of the estimated relationship. The fitted nonlinear curve follows the general pattern of the observed data while remaining relatively stable after accounting for the other predictors in the model. The actual-versus-predicted WAR plot also showed predictions closely following the 45-degree reference line, consistent with the model's very low prediction errors and extremely high R².
+
+Overall, the nonlinear analysis provides little evidence that adding a quadratic age effect improves the combined WAR model. Although player age could theoretically have a curved relationship with performance, the results indicate that Age and Age² do not provide significant additional explanatory power once offensive production, baserunning, defensive value, and other performance measures are included. The combined linear model therefore remains a highly effective model for explaining WAR, and the nonlinear extension does not meaningfully improve its predictive accuracy. This provides a useful basis for the next section, where interaction effects can be examined to determine whether the influence of one predictor changes depending on the level of another predictor.
+
+```{r}
+###############################################################
+# Nonlinear Effects
+###############################################################
+
+
+hitters$Age2 <- hitters$Age^2
+
+
+# Build the Nonlinear Multiple Regression Model
+
+
+nonlinear_WAR_model <- lm(
+  WAR ~ OPS + R + SB + K_Percent +
+    wRC_plus + Off + BsR + Def + xwOBA +
+    Age + Age2,
+  data = hitters
+)
+
+
+# Regression Summary
+
+
+summary(nonlinear_WAR_model)
+
+
+# 95% Confidence Intervals
+
+
+confint(nonlinear_WAR_model)
+
+
+
+# ANOVA Table
+
+
+anova(nonlinear_WAR_model)
+
+
+
+# Model Performance
+
+
+summary(nonlinear_WAR_model)$r.squared
+
+summary(nonlinear_WAR_model)$adj.r.squared
+
+summary(nonlinear_WAR_model)$sigma
+
+
+
+# Prediction Accuracy
+
+
+nonlinear_predictions <- predict(nonlinear_WAR_model)
+
+
+# Root Mean Squared Error (RMSE)
+
+
+nonlinear_rmse <- sqrt(
+  mean((hitters$WAR - nonlinear_predictions)^2)
+)
+
+nonlinear_rmse
+
+
+
+# Mean Absolute Error (MAE)
+
+
+nonlinear_mae <- mean(
+  abs(hitters$WAR - nonlinear_predictions)
+)
+
+nonlinear_mae
+
+
+
+# Model Performance Summary
+
+
+nonlinear_model_results <- data.frame(
+  
+  R2 = summary(nonlinear_WAR_model)$r.squared,
+  
+  Adjusted_R2 = summary(nonlinear_WAR_model)$adj.r.squared,
+  
+  RSE = summary(nonlinear_WAR_model)$sigma,
+  
+  RMSE = nonlinear_rmse,
+  
+  MAE = nonlinear_mae
+)
+
+nonlinear_model_results
+
+
+
+# Compare Linear and Nonlinear Models
+
+
+AIC(combined_model, nonlinear_WAR_model)
+
+BIC(combined_model, nonlinear_WAR_model)
+
+anova(combined_model, nonlinear_WAR_model)
+
+
+# Compare Adjusted R-Squared
+
+
+summary(combined_model)$adj.r.squared
+
+summary(nonlinear_WAR_model)$adj.r.squared
+
+
+# Compare RMSE
+
+
+full_predictions <- predict(combined_model)
+
+full_rmse <- sqrt(
+  mean((hitters$WAR - full_predictions)^2)
+)
+
+full_rmse
+
+nonlinear_rmse
+
+
+# Compare MAE
+
+
+full_mae <- mean(
+  abs(hitters$WAR - full_predictions)
+)
+
+full_mae
+
+nonlinear_mae
+
+
+###############################################################
+# Visualize the Age Effect
+###############################################################
+
+
+# Create a sequence of player ages
+
+
+age_sequence <- seq(
+  min(hitters$Age),
+  max(hitters$Age),
+  length.out = 100
+)
+
+
+
+# Predict WAR across the age range
+
+
+age_predictions <- predict(
+  nonlinear_WAR_model,
+  newdata = data.frame(
+    OPS = mean(hitters$OPS),
+    R = mean(hitters$R),
+    SB = mean(hitters$SB),
+    K_Percent = mean(hitters$K_Percent),
+    wRC_plus = mean(hitters$wRC_plus),
+    Off = mean(hitters$Off),
+    BsR = mean(hitters$BsR),
+    Def = mean(hitters$Def),
+    xwOBA = mean(hitters$xwOBA),
+    Age = age_sequence,
+    Age2 = age_sequence^2
+  )
+)
+
+
+# Scatterplot of Age and WAR
+
+
+plot(
+  hitters$Age,
+  hitters$WAR,
+  main = "Age and WAR with Nonlinear Regression Curve",
+  xlab = "Age",
+  ylab = "WAR",
+  pch = 16
+)
+
+
+# Add the estimated nonlinear age curve
+
+
+lines(
+  age_sequence,
+  age_predictions,
+  lwd = 2
+)
+
+
+###############################################################
+# Predicted vs Actual WAR
+###############################################################
+
+plot(
+  hitters$WAR,
+  nonlinear_predictions,
+  main = "Actual vs Predicted WAR - Nonlinear Model",
+  xlab = "Actual WAR",
+  ylab = "Predicted WAR"
+)
+
+abline(
+  0,
+  1,
+  lwd = 2
+)
+```
+
+## Interaction Effects
+
+The interaction-effects analysis examined whether the relationship between key predictors and fWAR changes depending on another player characteristic. Three interaction models were evaluated: Position × Defensive Runs (Def), OPS × Defensive Runs (Def), and Offensive Runs (Off) × Baserunning Runs (BsR). These models were compared with the combined multiple regression model to determine whether adding interaction terms provided meaningful improvements in explanatory power and model fit.
+
+Position × Defensive Value
+
+The Position × Def interaction model produced the strongest overall performance of the three interaction models. The model was statistically significant, with an F-statistic of 10,810 and a p-value below 2.2 × 10⁻¹⁶. It produced an R² of 0.9941 and an adjusted R² of 0.9940, meaning that approximately 99.4% of the variation in fWAR was explained by the predictors in the model. The residual standard error was 0.1540, while the RMSE and MAE were 0.1528 and 0.1219, respectively. These values represent a small improvement over the combined model, which had an adjusted R² of approximately 0.9938 and an RMSE of approximately 0.1555.
+
+The main effects of OPS, R, K%, Off, BsR, and Def remained statistically significant. OPS had a negative coefficient of -2.609 (p < 2.2 × 10⁻¹⁶), while Runs had a positive coefficient of 0.0113 (p < 2.2 × 10⁻¹⁶). K% had a negative coefficient of -0.00231 (p = 0.00408), and Off had a positive coefficient of 0.1129 (p < 2.2 × 10⁻¹⁶). BsR had a negative coefficient of -0.0202 (p = 5.6 × 10⁻¹¹), while Def had a positive coefficient of 0.0937 (p < 2.2 × 10⁻¹⁶). Several individual position coefficients were not statistically significant, indicating that the effect of position alone was relatively limited after controlling for the other variables.
+
+However, several of the Position × Def interaction terms were statistically significant. The interaction between Def and second basemen was significant, with a coefficient of 0.00715 (p = 0.0156). The Def × third baseman interaction was also significant, with a coefficient of 0.0101 (p = 0.000554). The Def × shortstop interaction was significant as well, with a coefficient of 0.00902 (p = 0.00103). The catcher and outfielder interactions were close to significance, with p-values of 0.0613 and 0.0601, respectively, while the designated hitter interaction was not significant (p = 0.387).
+
+The ANOVA results provide additional evidence that the interaction between defensive value and position contributes information to the model. The overall Position effect was statistically significant (p = 0.0001084), and the Def × Position interaction was also statistically significant, with an F-statistic of 3.354 and a p-value of 0.00276. This indicates that the relationship between defensive value and fWAR differs across at least some playing positions. The interaction model also produced a substantially lower AIC of -1220.493 and BIC of -1100.257 compared with the combined model's AIC of 3602.419 and BIC of 3675.606.
+
+OPS × Defensive Value
+
+The OPS × Def interaction model was also statistically significant, with an F-statistic of approximately 22,090 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.9939 and an adjusted R² of 0.9938. The residual standard error was 0.1561, with an RMSE of 0.1555 and an MAE of 0.1246. These results were nearly identical to the original combined model, suggesting that adding the OPS × Def interaction provided very little improvement in predictive performance.
+
+The OPS × Def interaction term itself was not statistically significant. Its coefficient was -0.00293, with a p-value of 0.563. The 95% confidence interval ranged from approximately -0.0129 to 0.00701, which includes zero. The ANOVA results also showed that the interaction term was not significant (F = 0.335, p = 0.563). Therefore, there is little evidence that the relationship between OPS and fWAR changes depending on a player's defensive value after controlling for the other variables.
+
+The model's fit statistics support this conclusion. The adjusted R² was essentially unchanged from the combined model, while the RMSE and MAE were also almost identical. The AIC was -1194.488 and the BIC was -1131.756. Although both values were substantially lower than those of the original combined model, the lack of significance for the interaction term and the negligible improvement in R² indicate that OPS × Def does not provide much additional explanatory value.
+
+Off × BsR
+
+The Off × BsR interaction model produced results very similar to the OPS × Def model. The overall model was statistically significant, with an F-statistic of approximately 22,090 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.9939 and an adjusted R² of 0.9938. The residual standard error was 0.1561, while the RMSE was 0.1555 and the MAE was 0.1246.
+
+The Off × BsR interaction term was not statistically significant. The estimated coefficient was -0.0000180 with a p-value of 0.799. Its 95% confidence interval ranged from approximately -0.000157 to 0.000121, again including zero. The ANOVA results also showed no significant contribution from the interaction term (F = 0.065, p = 0.799). This indicates that there is little evidence that the effect of offensive value on fWAR changes based on a player's baserunning value.
+
+The model fit statistics were nearly identical to those of the combined model. Its adjusted R² was 0.9938, RMSE was 0.1555, and MAE was 0.1246. The AIC was -1194.216 and the BIC was -1131.484. Therefore, adding the Off × BsR interaction did not meaningfully improve the model's explanatory or predictive performance.
+
+Comparison of Interaction Models
+
+Overall, the Position × Def interaction was the most useful interaction tested. It produced the highest R² (0.9941), highest adjusted R² (0.9940), lowest RSE (0.1540), lowest RMSE (0.1528), and lowest MAE (0.1219) among the three interaction models. More importantly, the overall Def × Position interaction was statistically significant, and several individual position-specific interactions were significant. This suggests that defensive value does not have exactly the same relationship with fWAR for every position.
+
+In comparison, the OPS × Def and Off × BsR interactions did not provide meaningful additional information. Neither interaction term was statistically significant, and their model performance was almost unchanged from the combined model. The Position × Def model also had the lowest AIC and BIC of the three interaction models, with values of -1220.493 and -1100.257, respectively, compared with -1194.488/-1131.756 for OPS × Def and -1194.216/-1131.484 for Off × BsR.
+
+Therefore, the results support retaining Position × Def as the most useful interaction effect for the final fWAR modeling process. The finding makes practical sense because defensive contributions can vary in importance depending on where a player plays. The other two interactions did not demonstrate enough statistical or predictive improvement to justify their inclusion. These results will be considered when selecting the final model and determining which variables and relationships provide the strongest explanation of fWAR.
+
+```{r}
+###############################################################
+# Interaction Effects
+###############################################################
+
+
+###############################################################
+# Model 1: Position × Defensive Value
+###############################################################
+
+
+interaction_position_def <- lm(
+  WAR ~ OPS + R + SB + K_Percent + wRC_plus +
+    Off + BsR + Def * Position + xwOBA,
+  data = hitters
+)
+
+
+# Regression Summary
+
+summary(interaction_position_def)
+
+
+# 95% Confidence Intervals
+
+confint(interaction_position_def)
+
+
+# ANOVA Table
+
+anova(interaction_position_def)
+
+
+# Model Performance
+
+
+summary(interaction_position_def)$r.squared
+
+summary(interaction_position_def)$adj.r.squared
+
+summary(interaction_position_def)$sigma
+
+
+# RMSE
+
+position_def_predictions <- predict(interaction_position_def)
+
+position_def_rmse <- sqrt(
+  mean((hitters$WAR - position_def_predictions)^2)
+)
+
+position_def_rmse
+
+
+# MAE
+
+position_def_mae <- mean(
+  abs(hitters$WAR - position_def_predictions)
+)
+
+position_def_mae
+
+
+# Model Performance Summary
+
+position_def_results <- data.frame(
+  
+  R2 = summary(interaction_position_def)$r.squared,
+  
+  Adjusted_R2 = summary(interaction_position_def)$adj.r.squared,
+  
+  RSE = summary(interaction_position_def)$sigma,
+  
+  RMSE = position_def_rmse,
+  
+  MAE = position_def_mae
+)
+
+position_def_results
+
+
+# Compare with Combined Model
+
+
+AIC(combined_model, interaction_position_def)
+
+BIC(combined_model, interaction_position_def)
+
+anova(combined_model, interaction_position_def)
+
+
+###############################################################
+# Interaction Plot
+###############################################################
+
+
+interaction.plot(
+  hitters$Position,
+  cut(hitters$Def,
+      breaks = 4,
+      labels = c("Low Def", "Below Avg Def",
+                 "Above Avg Def", "High Def")),
+  hitters$WAR,
+  xlab = "Position",
+  ylab = "Mean WAR",
+  trace.label = "Defensive Value",
+  main = "Position - Defensive Value Interaction"
+)
+
+
+
+###############################################################
+# Model 2: OPS × Defensive Value
+###############################################################
+
+
+interaction_ops_def <- lm(
+  WAR ~ OPS * Def + R + SB + K_Percent + wRC_plus +
+    Off + BsR + xwOBA,
+  data = hitters
+)
+
+
+# Regression Summary
+
+summary(interaction_ops_def)
+
+
+# 95% Confidence Intervals
+
+confint(interaction_ops_def)
+
+
+# ANOVA Table
+
+anova(interaction_ops_def)
+
+
+# Model Performance
+
+
+summary(interaction_ops_def)$r.squared
+
+summary(interaction_ops_def)$adj.r.squared
+
+summary(interaction_ops_def)$sigma
+
+
+# RMSE
+
+ops_def_predictions <- predict(interaction_ops_def)
+
+ops_def_rmse <- sqrt(
+  mean((hitters$WAR - ops_def_predictions)^2)
+)
+
+ops_def_rmse
+
+
+# MAE
+
+ops_def_mae <- mean(
+  abs(hitters$WAR - ops_def_predictions)
+)
+
+ops_def_mae
+
+
+# Model Performance Summary
+
+ops_def_results <- data.frame(
+  
+  R2 = summary(interaction_ops_def)$r.squared,
+  
+  Adjusted_R2 = summary(interaction_ops_def)$adj.r.squared,
+  
+  RSE = summary(interaction_ops_def)$sigma,
+  
+  RMSE = ops_def_rmse,
+  
+  MAE = ops_def_mae
+)
+
+ops_def_results
+
+
+# Compare with Combined Model
+
+
+AIC(combined_model, interaction_ops_def)
+
+BIC(combined_model, interaction_ops_def)
+
+anova(combined_model, interaction_ops_def)
+
+
+
+###############################################################
+# Model 3: Offensive Value × Baserunning Value
+###############################################################
+
+
+interaction_off_bsr <- lm(
+  WAR ~ OPS + R + SB + K_Percent + wRC_plus +
+    Off * BsR + Def + xwOBA,
+  data = hitters
+)
+
+
+# Regression Summary
+
+summary(interaction_off_bsr)
+
+
+# 95% Confidence Intervals
+
+confint(interaction_off_bsr)
+
+
+# ANOVA Table
+
+anova(interaction_off_bsr)
+
+
+
+# Model Performance
+
+
+summary(interaction_off_bsr)$r.squared
+
+summary(interaction_off_bsr)$adj.r.squared
+
+summary(interaction_off_bsr)$sigma
+
+
+# RMSE
+
+off_bsr_predictions <- predict(interaction_off_bsr)
+
+off_bsr_rmse <- sqrt(
+  mean((hitters$WAR - off_bsr_predictions)^2)
+)
+
+off_bsr_rmse
+
+
+# MAE
+
+off_bsr_mae <- mean(
+  abs(hitters$WAR - off_bsr_predictions)
+)
+
+off_bsr_mae
+
+
+# Model Performance Summary
+
+off_bsr_results <- data.frame(
+  
+  R2 = summary(interaction_off_bsr)$r.squared,
+  
+  Adjusted_R2 = summary(interaction_off_bsr)$adj.r.squared,
+  
+  RSE = summary(interaction_off_bsr)$sigma,
+  
+  RMSE = off_bsr_rmse,
+  
+  MAE = off_bsr_mae
+)
+
+off_bsr_results
+
+
+
+# Compare with Combined Model
+
+
+AIC(combined_model, interaction_off_bsr)
+
+BIC(combined_model, interaction_off_bsr)
+
+anova(combined_model, interaction_off_bsr)
+
+
+
+###############################################################
+# Compare All Interaction Models
+###############################################################
+
+
+interaction_model_comparison <- data.frame(
+  
+  Model = c(
+    "Combined Model",
+    "Position - Def",
+    "OPS - Def",
+    "Off - BsR"
+  ),
+  
+  R2 = c(
+    summary(combined_model)$r.squared,
+    summary(interaction_position_def)$r.squared,
+    summary(interaction_ops_def)$r.squared,
+    summary(interaction_off_bsr)$r.squared
+  ),
+  
+  Adjusted_R2 = c(
+    summary(combined_model)$adj.r.squared,
+    summary(interaction_position_def)$adj.r.squared,
+    summary(interaction_ops_def)$adj.r.squared,
+    summary(interaction_off_bsr)$adj.r.squared
+  ),
+  
+  RSE = c(
+    summary(combined_model)$sigma,
+    summary(interaction_position_def)$sigma,
+    summary(interaction_ops_def)$sigma,
+    summary(interaction_off_bsr)$sigma
+  ),
+  
+  RMSE = c(
+    sqrt(mean(residuals(combined_model)^2)),
+    position_def_rmse,
+    ops_def_rmse,
+    off_bsr_rmse
+  ),
+  
+  MAE = c(
+    mean(abs(residuals(combined_model))),
+    position_def_mae,
+    ops_def_mae,
+    off_bsr_mae
+  )
+)
+
+interaction_model_comparison
+
+
+
+###############################################################
+# AIC Comparison
+###############################################################
+
+AIC(
+  combined_model,
+  interaction_position_def,
+  interaction_ops_def,
+  interaction_off_bsr
+)
+
+
+###############################################################
+# BIC Comparison
+###############################################################
+
+BIC(
+  combined_model,
+  interaction_position_def,
+  interaction_ops_def,
+  interaction_off_bsr
+)
+```
+
+## Conclusion
+
+The multiple linear regression analysis provided a more complete evaluation of the factors associated with variation in MLB player fWAR than the simple regression models examined earlier. Across the traditional offensive, sabermetric, Statcast, combined, nonlinear, and interaction models, the results consistently showed that multiple predictors can explain a very large proportion of the variation in fWAR when considered simultaneously. The traditional offensive model provided a strong baseline, with an adjusted R² of 0.708, while the sabermetric and Statcast models provided additional perspectives on how different categories of player statistics relate to overall value.
+
+The combined model produced a substantial improvement over the individual multiple regression approaches. The model incorporated OPS, R, SB, K%, wRC+, Off, BsR, Def, and xwOBA and produced an R² of 0.9939 and an adjusted R² of 0.9938. Its RMSE was 0.1555 and its MAE was 0.1246, indicating that the predicted WAR values were generally very close to the observed values. The actual-versus-predicted WAR plot also showed a strong alignment between the two measures, providing visual evidence of the model's strong predictive performance. However, the extremely high R² should be interpreted carefully because several of the predictors, particularly Off and Def, are closely related to the construction of fWAR itself. Therefore, the model's ability to explain WAR does not necessarily mean that these variables independently predict future player performance.
+
+The multicollinearity analysis demonstrated an important limitation of the combined model. OPS had a VIF of 10.94, while wRC+ and Off had extremely high VIF values of 83.73 and 93.96, respectively. The correlation matrix supported these findings, showing very strong relationships between wRC+ and Off (r = 0.974), OPS and wRC+ (r = 0.944), and OPS and Off (r = 0.929). xwOBA was also strongly correlated with OPS, wRC+, and Off. These results indicate that several offensive measures contain overlapping information. As a result, individual regression coefficients should not be interpreted as completely independent effects, even though the overall model has very strong predictive performance.
+
+The nonlinear analysis examined whether player age had a curved relationship with fWAR by adding both Age and Age² to the combined model. Neither Age nor Age² was statistically significant, with p-values of 0.692 and 0.611, respectively. The nonlinear model produced an adjusted R² of 0.9938, RMSE of 0.1554, and MAE of 0.1245, which were nearly identical to the original combined model. The model comparison also did not provide evidence that the nonlinear age terms meaningfully improved the model. Therefore, based on this analysis, there was not sufficient evidence to conclude that adding a quadratic age effect improved the explanation of fWAR.
+
+The interaction analysis provided a more useful result. Three potential interactions were examined: Position × Def, OPS × Def, and Off × BsR. The Position × Def model performed the best, producing an adjusted R² of 0.9940, an RMSE of 0.1528, and an MAE of 0.1219. The overall Position × Def interaction was statistically significant (p = 0.00276), and several position-specific interactions were significant, particularly for second basemen, third basemen, and shortstops. This suggests that the relationship between defensive value and fWAR differs depending on a player's position. In contrast, neither the OPS × Def nor Off × BsR interaction was statistically significant, and both produced performance measures that were almost identical to the original combined model.
+
+Overall, this demonstrates that the strongest fWAR model is not necessarily the model with the largest number of variables, but rather the model that balances explanatory power, statistical significance, and the relationships among predictors. The combined model showed that offensive production, baserunning, and defensive value collectively explain fWAR extremely well, while the interaction analysis showed that incorporating Position × Def can provide a small but meaningful improvement. At the same time, the multicollinearity results show that many of the strongest predictors overlap substantially, and the extremely high explanatory power should therefore be interpreted with caution. The findings from this section provide the foundation for selecting and evaluating the final fWAR model while also highlighting the importance of considering multicollinearity, nonlinear relationships, and interaction effects rather than relying solely on R².
