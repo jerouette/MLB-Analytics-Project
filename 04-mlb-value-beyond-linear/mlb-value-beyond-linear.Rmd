@@ -1,0 +1,1688 @@
+---
+title: "mlb-value-beyond-linear"
+author: "Jacob Rouette"
+date: "2026-11-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r} 
+data_path <- Sys.getenv("STATCAST_DATA_PATH")
+
+hitters <- read.csv(file.path(data_path, "FullStatcastData.csv"))
+```
+
+
+# MLB Value Beyond Linear
+
+The final stage of this project focuses on evaluating whether more advanced predictive methods can improve upon the carefully specified regression models developed in the previous salary analysis. Earlier sections established that MLB player salary is influenced by both player performance and labor-market factors, including service time, age, contract regime, position, and performance metrics such as WAR and xwOBA. Rather than developing another series of increasingly complex regression models, this stage uses the final multiple regression model as a benchmark and evaluates whether alternative model-selection, regularization, and machine learning methods provide more accurate predictions of player salary.
+
+The analysis compares several predictive approaches, including best subset selection, stepwise regression, ridge regression, LASSO regression, and random forest. Best subset and stepwise selection evaluate whether a smaller set of predictors can maintain or improve predictive performance relative to the full regression model. Ridge and LASSO regression address the substantial correlations among many of the baseball performance variables identified in the earlier correlation analysis, while random forest provides a nonlinear approach that can capture more complex relationships and interactions among player characteristics.
+
+Because the primary objective of this repository is prediction, the models will be evaluated using out-of-sample performance rather than relying only on how well they fit the data used to estimate the models. Model performance will be compared using measures such as root mean squared error (RMSE), mean absolute error (MAE), and R². For the regression-based models, adjusted R², AIC, and BIC will also be considered where appropriate. Using a common evaluation framework allows the different modeling approaches to be compared consistently while also examining the trade-off between predictive accuracy, model complexity, and interpretability.
+
+An additional objective of this repository is to apply the salary predictions to a practical baseball analytics problem through surplus value analysis. The difference between a player's predicted salary and actual salary will be used to identify player-seasons where compensation differed substantially from the amount predicted by the model. This analysis provides a practical application of the predictive models by showing how salary predictions could potentially be used to identify players whose actual compensation was substantially above or below the model's estimated salary.
+
+Ultimately, this repository determines whether more advanced predictive techniques provide meaningful improvements over the established multiple regression benchmark. The analysis therefore moves beyond simply explaining relationships in the data and focuses on how accurately different approaches can predict MLB player salaries. By combining model comparison, regularization, nonlinear prediction, and surplus value analysis, this final stage evaluates both the predictive performance and practical usefulness of the modeling approaches developed throughout the project.
+
+## Evaluation Metrics
+
+The evaluation framework establishes how the different salary models will be compared throughout this repository. Because the goal of this analysis is to determine whether alternative modeling approaches improve salary prediction, the models are evaluated primarily using out-of-sample performance on a testing dataset. The data were divided into 1,101 observations for training and 276 observations for testing, representing an 80/20 split. The same training and testing data will be used for the models developed in the following sections so that their performance can be compared consistently.
+
+The final multiple regression model developed in the previous salary modeling repository was used as the benchmark. The model includes Service Time, WAR, Contract Regime, Age, xwOBA, wRC+, financial tier, and Position, along with an interaction between Service Time and WAR. On the training data, the model produced an R² of 0.7808 and an adjusted R² of 0.7775. The residual standard error was 0.643. The overall model was statistically significant, with an F-statistic of 241.3 and a p-value below 0.001.
+
+Several individual predictors were statistically significant in the benchmark model. Service Time had a positive coefficient of 0.0691, while the Arbitration and Free Agency contract regimes had coefficients of 1.5537 and 1.9703 relative to the Pre-Arbitration reference group. xwOBA also had a positive and statistically significant coefficient of 3.7116. Both Mid Market and Small Market financial tiers had negative coefficients relative to the Big Market reference group. Several positions also had statistically significant coefficients. The Service Time × WAR interaction was statistically significant with a coefficient of 0.0105 and a p-value of 0.0002, indicating that the relationship between WAR and salary changes as service time increases. In contrast, WAR and Age were not statistically significant individually in this model.
+
+For the purposes of comparing models in this repository, however, training-set fit is not the primary measure of performance. The benchmark model was evaluated on the 276 observations in the testing dataset, producing a test R² of 0.8266, an RMSE of 0.5800, and an MAE of 0.4231. These values provide the baseline against which the best subset, ridge, LASSO, and random forest models will be evaluated. A model with a lower test RMSE or MAE indicates smaller prediction errors, while a higher test R² indicates that more of the variation in log salary is explained by the model on observations that were not used to estimate its coefficients.
+
+The benchmark model also produced an AIC of 2,170.973 and a BIC of 2,261.044. These measures will be useful when comparing regression-based models where likelihood-based comparisons are appropriate. They will not be treated as the primary evaluation criteria for ridge regression, LASSO, or random forest because those methods use different estimation procedures and are better evaluated through their out-of-sample prediction performance.
+
+Overall, the benchmark establishes a test-set R² of 0.8266, RMSE of 0.5800, and MAE of 0.4231. The following sections will determine whether best subset selection, ridge regression, LASSO, or random forest can improve upon these out-of-sample results while providing a useful and interpretable model for MLB salary prediction.
+
+```{r}
+###############################################################
+# Evaluation Metrics
+###############################################################
+
+############################################################
+# Create Contract Regime and Log Salary Variables
+############################################################
+
+# Less than 3 years = Pre-Arbitration
+# 3 to less than 6 years = Arbitration
+# 6 or more years = Free Agency
+
+hitters$Contract_Regime <- ifelse(
+  hitters$Service_Time < 3,
+  "Pre-Arbitration",
+  ifelse(
+    hitters$Service_Time < 6,
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+# Pre-Arbitration is used as the reference group
+
+hitters$Contract_Regime <- factor(
+  hitters$Contract_Regime,
+  levels = c(
+    "Pre-Arbitration",
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+hitters$log_salary <- log(hitters$Base_Salary)
+
+###############################################################
+# Training and Testing Data
+###############################################################
+
+#-------------------------------------------------------------
+# Create an 80/20 training and testing split
+#-------------------------------------------------------------
+
+set.seed(123)
+
+train_index <- sample(
+  1:nrow(hitters),
+  size = 0.80 * nrow(hitters)
+)
+
+train_data <- hitters[train_index, ]
+
+test_data <- hitters[-train_index, ]
+
+
+# Number of observations in each dataset
+
+nrow(train_data)
+
+nrow(test_data)
+
+
+
+###############################################################
+# Evaluation Function
+###############################################################
+
+# Create a function to calculate the main test-set metrics
+
+
+evaluate_model <- function(model, test_data) {
+  
+  # Make predictions using the testing data
+  
+  predictions <- predict(
+    model,
+    newdata = test_data
+  )
+  
+  
+  # Actual log salary values
+  
+  actual <- test_data$log_salary
+  
+  
+  # RMSE
+  
+  RMSE <- sqrt(
+    mean((actual - predictions)^2)
+  )
+  
+  
+  # MAE
+  
+  MAE <- mean(
+    abs(actual - predictions)
+  )
+  
+  
+  # Test R-squared
+  
+  R_squared <- 1 -
+    sum((actual - predictions)^2) /
+    sum((actual - mean(actual))^2)
+  
+  
+  # Return the evaluation metrics
+  
+  data.frame(
+    R2 = R_squared,
+    RMSE = RMSE,
+    MAE = MAE
+  )
+}
+
+
+
+###############################################################
+# Benchmark Model
+###############################################################
+
+
+salary_full_model <- lm(
+  
+  log_salary ~ Service_Time * WAR +
+    Contract_Regime +
+    Age +
+    xwOBA +
+    wRC_plus +
+    financial_tier +
+    Position,
+  
+  data = train_data
+)
+
+
+summary(salary_full_model)
+
+
+# 95% Confidence Intervals
+
+confint(salary_full_model)
+
+
+#-------------------------------------------------------------
+# Model Performance
+#-------------------------------------------------------------
+
+summary(salary_full_model)$r.squared
+
+summary(salary_full_model)$adj.r.squared
+
+summary(salary_full_model)$sigma
+
+
+
+###############################################################
+# Test-Set Performance
+###############################################################
+
+#-------------------------------------------------------------
+# Evaluate the benchmark model using the testing data
+#-------------------------------------------------------------
+
+benchmark_results <- evaluate_model(
+  
+  salary_full_model,
+  
+  test_data
+)
+
+benchmark_results
+
+
+
+###############################################################
+# AIC
+###############################################################
+
+AIC(salary_full_model)
+
+
+
+###############################################################
+# BIC
+###############################################################
+
+BIC(salary_full_model)
+
+
+
+###############################################################
+# Benchmark Model Summary
+###############################################################
+
+
+benchmark_summary <- data.frame(
+  
+  Model = "Final Multiple Regression",
+  
+  R2 = benchmark_results$R2,
+  
+  Adjusted_R2 = summary(
+    salary_full_model
+  )$adj.r.squared,
+  
+  RSE = summary(
+    salary_full_model
+  )$sigma,
+  
+  RMSE = benchmark_results$RMSE,
+  
+  MAE = benchmark_results$MAE,
+  
+  AIC = AIC(
+    salary_full_model
+  ),
+  
+  BIC = BIC(
+    salary_full_model
+  )
+)
+
+benchmark_summary
+```
+
+## Best Subset Selection
+
+Best subset selection was used to identify combinations of salary predictors that provide strong explanatory power while limiting unnecessary variables. The procedure evaluated all possible combinations of the candidate predictors using the training data, with models containing up to 25 predictors. Because the testing data were not used during the selection process, it remains available for evaluating the selected model's out-of-sample performance.
+
+The adjusted R² results showed a substantial improvement as predictors were added during the smaller models, followed by a much slower increase as model size grew. The adjusted R² curve began at approximately 0.59 for the one-predictor model and increased to roughly 0.65 before leveling off. This indicates that adding additional predictors initially provided meaningful improvements in explanatory power, but the benefit of adding more variables became relatively small once the model included a larger set of predictors. The model with the highest adjusted R² included a relatively large number of predictors, including PA, RBI, K%, wOBA, Off, Def, Barrel%, Hard-Hit%, EV, Age, Service Time, several position indicators, and financial tier.
+
+Mallows' Cp showed a similar pattern of diminishing returns. Cp decreased sharply as predictors were added, reaching its lowest point with a model containing approximately 12 predictors before beginning to increase again. The minimum-Cp model included PA, RBI, K%, BsR, Barrel%, Hard-Hit%, EV, Age, Service Time, DH, and the financial-tier indicators. This model provided a more limited set of predictors than the model selected by adjusted R² while still capturing much of the available explanatory information.
+
+The BIC criterion favored an even more parsimonious model. BIC decreased rapidly among the smallest models and reached its minimum with a five-predictor model containing PA, Hard-Hit%, Service Time, Mid Market, and Small Market. BIC then increased as additional predictors were added. This result demonstrates the effect of BIC's stronger penalty for model complexity. Rather than continuing to add variables for relatively small improvements in fit, the BIC criterion selected a substantially simpler model.
+
+The three selection criteria therefore produced different model sizes. Adjusted R² favored a larger model because it continued to gain explanatory power as additional variables were included. Mallows' Cp identified a medium-sized model that balanced fit and complexity, while BIC selected a much smaller model focused primarily on playing time, contact quality, service time, and financial tier. These differences demonstrate why relying on a single selection criterion can lead to different conclusions about the appropriate model size.
+
+For this repository, the BIC-selected model is particularly useful because the goal is not simply to maximize in-sample explanatory power. A smaller model can provide a more interpretable representation of the factors associated with salary while reducing the number of unnecessary predictors. However, the final decision should be based on the model's performance on the testing data. The BIC-selected model will therefore be evaluated using the same test RMSE, MAE, and R² measures established in Section 8.1 and compared directly with the final multiple regression benchmark.
+
+Overall, best subset selection shows that a relatively small number of variables can capture much of the salary-related information contained in the larger predictor set. The strong role of Service Time and financial tier is consistent with the findings from the previous salary analysis, while the inclusion of PA and Hard-Hit% indicates that both labor-market factors and performance-related measures contribute to salary prediction. The testing results will determine whether this simpler subset provides a meaningful improvement over the benchmark regression model.
+
+```{r}
+###############################################################
+# Best Subset Selection
+###############################################################
+
+library(leaps)
+
+###############################################################
+# Best Subset Selection
+###############################################################
+
+best_subset <- regsubsets(
+  
+  log_salary ~
+    PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data,
+  
+  nvmax = 25
+)
+
+
+
+###############################################################
+# Summary of Best Subset Results
+###############################################################
+
+subset_summary <- summary(best_subset)
+
+subset_summary
+
+###############################################################
+# Adjusted R²
+###############################################################
+
+
+plot(
+  subset_summary$adjr2,
+  type = "b",
+  xlab = "Number of Predictors",
+  ylab = "Adjusted R²",
+  main = "Best Subset Selection: Adjusted R²"
+)
+
+
+
+###############################################################
+# Mallows' Cp
+###############################################################
+
+
+plot(
+  subset_summary$cp,
+  type = "b",
+  xlab = "Number of Predictors",
+  ylab = "Mallows' Cp",
+  main = "Best Subset Selection: Mallows' Cp"
+)
+
+
+###############################################################
+# Bayesian Information Criterion (BIC)
+###############################################################
+
+
+plot(
+  subset_summary$bic,
+  type = "b",
+  xlab = "Number of Predictors",
+  ylab = "BIC",
+  main = "Best Subset Selection: BIC"
+)
+
+
+###############################################################
+# Variables Included in the Best Models
+##############################################################
+
+best_adjr2_model <- which.max(
+  subset_summary$adjr2
+)
+
+coef(
+  best_subset,
+  id = best_adjr2_model
+)
+
+
+#-------------------------------------------------------------
+# Model with the lowest Mallows' Cp
+#-------------------------------------------------------------
+
+best_cp_model <- which.min(
+  subset_summary$cp
+)
+
+coef(
+  best_subset,
+  id = best_cp_model
+)
+
+
+
+#-------------------------------------------------------------
+# Model with the lowest BIC
+#-------------------------------------------------------------
+
+best_bic_model <- which.min(
+  subset_summary$bic
+)
+
+coef(
+  best_subset,
+  id = best_bic_model
+)
+
+
+
+###############################################################
+# Best Subset Model
+###############################################################
+
+best_subset_model <- lm(
+  
+  log_salary ~
+    PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data
+)
+```
+
+## Stepwise Selection
+
+Stepwise selection was used to identify smaller salary models through three approaches: forward selection, backward elimination, and bidirectional stepwise selection. Unlike best subset selection, which evaluates all possible combinations of predictors, stepwise methods add or remove predictors sequentially based on model fit. The selection procedures were performed using the training data, while the testing data remained separate for evaluating out-of-sample performance.
+
+The forward selection procedure produced a model with 15 degrees of freedom and an AIC of 2,680.535 and BIC of 2,755.594. Backward elimination produced a smaller model with 13 degrees of freedom, an AIC of 2,678.606, and a BIC of 2,743.658. The bidirectional stepwise procedure produced the same model as backward elimination, with identical AIC and BIC values. This indicates that both approaches ultimately selected the same set of predictors.
+
+The out-of-sample results were considerably different from the training-set model selection results. Forward selection produced a test R² of 0.6696, RMSE of 0.8006, and MAE of 0.6493. Backward elimination and stepwise selection both produced a test R² of 0.6697 and RMSE of 0.8004, with an MAE of 0.6497. Therefore, the backward and stepwise models provided nearly identical predictive performance, while forward selection produced very similar results as well.
+
+When compared with the final multiple regression benchmark from Section 8.1, all three stepwise approaches produced weaker out-of-sample performance. The benchmark model had a test R² of 0.8266, RMSE of 0.5800, and MAE of 0.4231. In comparison, the stepwise models explained approximately 15.7 percentage points less variation in the testing data and had substantially larger prediction errors. The RMSE increased from 0.5800 for the benchmark to approximately 0.8004 for the backward and stepwise models. MAE also increased from 0.4231 to approximately 0.6497.
+
+These results show that reducing the number of predictors through stepwise selection did not improve salary prediction in this dataset. Although backward elimination and stepwise selection produced slightly lower AIC and BIC values than forward selection, their out-of-sample performance remained substantially below that of the benchmark model. This demonstrates why model selection based only on in-sample criteria such as AIC, BIC, or adjusted R² does not necessarily produce the strongest predictive model.
+
+Overall, the stepwise procedures provided more parsimonious models, but the reduction in model complexity came with a noticeable decrease in out-of-sample predictive performance. The backward and bidirectional stepwise procedures selected the same model and performed almost identically, while forward selection produced a slightly different model with similarly weak testing performance. The results therefore provide a useful comparison for the regularization methods examined in the following sections, where ridge and LASSO will be used to control model complexity while retaining information from a larger set of predictors.
+
+```{r}
+###############################################################
+# Stepwise Selection
+###############################################################
+
+
+###############################################################
+# Full Multiple Regression Model
+###############################################################
+
+
+full_model <- lm(
+  
+  log_salary ~
+    PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data
+)
+
+
+summary(full_model)
+
+
+
+###############################################################
+# Null Model
+###############################################################
+
+null_model <- lm(
+  log_salary ~ 1,
+  data = train_data
+)
+
+summary(null_model)
+
+
+
+###############################################################
+# Forward Selection
+###############################################################
+
+
+forward_model <- step(
+  
+  null_model,
+  
+  scope = list(
+    lower = null_model,
+    upper = full_model
+  ),
+  
+  direction = "forward"
+)
+
+
+# Regression Summary
+
+summary(forward_model)
+
+
+
+###############################################################
+# Backward Elimination
+###############################################################
+
+
+backward_model <- step(
+  
+  full_model,
+  
+  direction = "backward"
+)
+
+
+# Regression Summary
+
+summary(backward_model)
+
+
+###############################################################
+# Stepwise Selection
+###############################################################
+
+
+stepwise_model <- step(
+  
+  full_model,
+  
+  direction = "both"
+)
+
+
+
+summary(stepwise_model)
+
+
+
+###############################################################
+# Model Comparisons
+###############################################################
+
+# Compare AIC
+
+AIC(
+  forward_model,
+  backward_model,
+  stepwise_model
+)
+
+
+# Compare BIC
+
+BIC(
+  forward_model,
+  backward_model,
+  stepwise_model
+)
+
+
+# Compare Adjusted R-squared
+
+summary(forward_model)$adj.r.squared
+
+summary(backward_model)$adj.r.squared
+
+summary(stepwise_model)$adj.r.squared
+
+
+
+###############################################################
+# Test-Set Performance
+###############################################################
+
+
+forward_results <- evaluate_model(
+  forward_model,
+  test_data
+)
+
+backward_results <- evaluate_model(
+  backward_model,
+  test_data
+)
+
+stepwise_results <- evaluate_model(
+  stepwise_model,
+  test_data
+)
+
+
+forward_results
+
+backward_results
+
+stepwise_results
+
+
+###############################################################
+# Stepwise Model Comparison
+###############################################################
+
+
+stepwise_comparison <- data.frame(
+  
+  Model = c(
+    "Forward Selection",
+    "Backward Elimination",
+    "Stepwise Selection"
+  ),
+  
+  R2 = c(
+    forward_results$R2,
+    backward_results$R2,
+    stepwise_results$R2
+  ),
+  
+  RMSE = c(
+    forward_results$RMSE,
+    backward_results$RMSE,
+    stepwise_results$RMSE
+  ),
+  
+  MAE = c(
+    forward_results$MAE,
+    backward_results$MAE,
+    stepwise_results$MAE
+  ),
+  
+  Adjusted_R2 = c(
+    summary(forward_model)$adj.r.squared,
+    summary(backward_model)$adj.r.squared,
+    summary(stepwise_model)$adj.r.squared
+  ),
+  
+  AIC = c(
+    AIC(forward_model),
+    AIC(backward_model),
+    AIC(stepwise_model)
+  ),
+  
+  BIC = c(
+    BIC(forward_model),
+    BIC(backward_model),
+    BIC(stepwise_model)
+  )
+)
+
+stepwise_comparison
+
+
+
+###############################################################
+# Compare with Benchmark Model
+###############################################################
+
+
+stepwise_vs_benchmark <- data.frame(
+  
+  Model = c(
+    "Final Multiple Regression",
+    "Forward Selection",
+    "Backward Elimination",
+    "Stepwise Selection"
+  ),
+  
+  R2 = c(
+    benchmark_results$R2,
+    forward_results$R2,
+    backward_results$R2,
+    stepwise_results$R2
+  ),
+  
+  RMSE = c(
+    benchmark_results$RMSE,
+    forward_results$RMSE,
+    backward_results$RMSE,
+    stepwise_results$RMSE
+  ),
+  
+  MAE = c(
+    benchmark_results$MAE,
+    forward_results$MAE,
+    backward_results$MAE,
+    stepwise_results$MAE
+  )
+)
+
+stepwise_vs_benchmark
+
+
+###############################################################
+# Variables Selected
+###############################################################
+
+names(coef(forward_model))
+
+names(coef(backward_model))
+
+names(coef(stepwise_model))
+```
+
+## Ridge Regression
+
+Ridge regression was used to address the substantial multicollinearity present among the salary predictors while retaining the full set of candidate variables. Unlike best subset and stepwise selection, ridge regression does not remove predictors from the model. Instead, it applies a penalty that shrinks coefficient estimates toward zero, allowing correlated predictors to remain in the model while reducing the influence of individual variables.
+
+The ridge penalty was selected using 10-fold cross-validation on the training data. The minimum cross-validation error occurred at a lambda value of 0.1047, while the lambda value within one standard error of the minimum was 0.3196. The model used the lambda that minimized cross-validation error because the goal of this section is to evaluate predictive performance rather than prioritize a more heavily regularized model.
+
+The resulting ridge model retained all candidate predictors, although the coefficient estimates were substantially reduced through regularization. Service time had a coefficient of approximately 0.208, while age had a coefficient of 0.074. Several performance variables also retained nonzero coefficients, including xBA, xwOBA, OPS, wOBA, BA, xSLG, and the various Statcast measures. The financial-tier coefficients remained negative relative to the Big Market reference category, with coefficients of approximately −0.153 for Mid Market and −0.219 for Small Market. Because ridge regression shrinks correlated predictors simultaneously, these coefficients should not be interpreted in the same way as coefficients from an ordinary least squares model.
+
+On the testing data, the ridge model produced an R² of 0.6680, meaning that approximately 66.8% of the variation in log salary was explained by the model for observations that were not used during model fitting. The test-set RMSE was 0.8024, while the MAE was 0.6577. These values provide an out-of-sample measure of the model's predictive performance.
+
+The ridge model performed below the final multiple regression benchmark. The benchmark produced a test R² of 0.8266, compared with 0.6680 for ridge regression. The benchmark also had a lower RMSE of 0.5800 compared with 0.8024 for ridge regression, as well as a lower MAE of 0.4231 compared with 0.6577. Therefore, in this dataset, ridge regularization did not improve out-of-sample salary prediction relative to the previously established multiple regression model.
+
+These results suggest that although multicollinearity is present among many of the salary predictors, shrinking the coefficients of all predictors did not provide an improvement in predictive accuracy. The ridge model still provides a useful comparison because it retains information from the full predictor set while controlling the size of the coefficients. The next section applies LASSO regression, which uses a similar penalty but can shrink some coefficients completely to zero and therefore perform variable selection as part of the regularization process.
+
+```{r}
+###############################################################
+# Ridge Regression
+###############################################################
+
+library(glmnet)
+
+###############################################################
+# Create Training Predictor Matrix
+###############################################################
+
+
+x_train <- model.matrix(
+  
+  ~ PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data
+)[, -1]
+
+
+y_train <- train_data$log_salary
+
+
+
+###############################################################
+# Create Testing Predictor Matrix
+###############################################################
+
+
+x_test <- model.matrix(
+  
+  ~ PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = test_data
+)[, -1]
+
+
+y_test <- test_data$log_salary
+
+
+###############################################################
+# Cross-Validation to Select Lambda
+###############################################################
+
+ridge_cv <- cv.glmnet(
+  
+  x_train,
+  
+  y_train,
+  
+  alpha = 0,
+  
+  nfolds = 10
+)
+
+
+###############################################################
+# Plot Cross-Validation Results
+###############################################################
+
+
+plot(ridge_cv)
+
+
+###############################################################
+# Best Lambda Values
+###############################################################
+
+
+ridge_cv$lambda.min
+
+
+ridge_cv$lambda.1se
+
+
+###############################################################
+# Fit Final Ridge Regression Model
+###############################################################
+
+
+ridge_model <- glmnet(
+  
+  x_train,
+  
+  y_train,
+  
+  alpha = 0,
+  
+  lambda = ridge_cv$lambda.min
+)
+
+
+###############################################################
+# Display Ridge Regression Coefficients
+###############################################################
+
+coef(ridge_model)
+
+###############################################################
+# Predictions on Testing Data
+###############################################################
+
+
+ridge_predictions <- predict(
+  
+  ridge_model,
+  
+  newx = x_test
+)
+
+
+###############################################################
+# Root Mean Squared Error (RMSE)
+###############################################################
+
+
+ridge_rmse <- sqrt(
+  
+  mean(
+    (y_test - ridge_predictions)^2
+  )
+)
+
+ridge_rmse
+
+
+
+###############################################################
+# Mean Absolute Error (MAE)
+###############################################################
+
+
+ridge_mae <- mean(
+  
+  abs(
+    y_test - ridge_predictions
+  )
+)
+
+ridge_mae
+
+
+###############################################################
+# R-Squared
+###############################################################
+
+
+ridge_r2 <- 1 -
+  
+  sum(
+    (y_test - ridge_predictions)^2
+  ) /
+  
+  sum(
+    (y_test - mean(y_test))^2
+  )
+
+ridge_r2
+
+
+###############################################################
+# Create Performance Summary
+###############################################################
+
+
+ridge_results <- data.frame(
+  
+  Model = "Ridge Regression",
+  
+  R2 = ridge_r2,
+  
+  RMSE = ridge_rmse,
+  
+  MAE = ridge_mae,
+  
+  Lambda = ridge_cv$lambda.min
+  
+)
+
+ridge_results
+
+
+###############################################################
+# Compare with Benchmark Model
+###############################################################
+
+
+ridge_vs_benchmark <- data.frame(
+  
+  Model = c(
+    "Final Multiple Regression",
+    "Ridge Regression"
+  ),
+  
+  R2 = c(
+    benchmark_results$R2,
+    ridge_r2
+  ),
+  
+  RMSE = c(
+    benchmark_results$RMSE,
+    ridge_rmse
+  ),
+  
+  MAE = c(
+    benchmark_results$MAE,
+    ridge_mae
+  )
+)
+
+ridge_vs_benchmark
+```
+
+## LASSO Regression
+
+LASSO regression was used to examine whether regularization could improve salary prediction while also reducing the number of predictors included in the model. Unlike ridge regression, LASSO can shrink individual coefficients completely to zero, allowing it to perform variable selection while controlling for multicollinearity. The model was fit using the same candidate predictors as the previous selection and ridge regression sections.
+
+A 10-fold cross-validation procedure was used on the training data to select the penalty parameter. The lambda value that minimized the cross-validation error was 0.00272, while the lambda value within one standard error of the minimum was 0.11222. The model used the minimum-error lambda for the final LASSO regression. The cross-validation plot shows that prediction error decreased substantially as the penalty weakened before leveling off at the lower-error region.
+
+At the selected lambda, LASSO reduced several coefficients completely to zero. The variables removed from the model were HR, BA, OPS, wRC+, BsR, xwOBA, and xSLG. The remaining predictors included traditional statistics, advanced metrics, Statcast measures, service time, age, position, and financial tier. This demonstrates the variable-selection feature of LASSO, as it was able to remove several highly correlated predictors while retaining other variables that contributed to the model.
+
+Among the retained predictors, Service_Time had a coefficient of approximately 0.253, while xBA had a coefficient of approximately 0.924. Other retained performance measures included wOBA, Off, Def, Barrel Percentage, Hard-Hit Percentage, and several other Statcast variables. The financial-tier coefficients were approximately −0.151 for Mid Market and −0.212 for Small Market relative to the Big Market reference category. As with ridge regression, the regularized coefficients should primarily be interpreted as the values produced by the penalized model rather than as direct causal effects.
+
+On the testing data, the LASSO model produced an R² of 0.6767, meaning it explained approximately 67.7% of the variation in log salary for observations that were not used during model fitting. The test-set RMSE was 0.7919, while the MAE was 0.6453.
+
+The LASSO model performed below the final multiple regression benchmark. The benchmark produced a test R² of 0.8266, compared with 0.6767 for LASSO. The benchmark also produced a lower RMSE of 0.5800 compared with 0.7919 for LASSO, and a lower MAE of 0.4231 compared with 0.6453. Therefore, LASSO regularization did not improve out-of-sample salary prediction relative to the benchmark model.
+
+Compared with ridge regression, LASSO produced slightly stronger testing performance. Ridge had a test R² of 0.6680, RMSE of 0.8024, and MAE of 0.6577, while LASSO produced an R² of 0.6767, RMSE of 0.7919, and MAE of 0.6453. The difference was relatively small, but LASSO achieved these results while eliminating several predictors entirely.
+
+Overall, LASSO provided useful evidence about which variables could be removed when regularization was applied, but the reduction in predictors did not lead to better out-of-sample prediction than the final multiple regression model. The results also show that LASSO performed somewhat better than ridge regression on the testing data, although both regularized approaches remained below the benchmark. This provides an important comparison before evaluating the random forest model in the next section.
+
+```{r}
+###############################################################
+# LASSO Regression
+###############################################################
+
+library(glmnet)
+
+###############################################################
+# Create Training Predictor Matrix
+###############################################################
+
+x_train <- model.matrix(
+  
+  ~ PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data
+)[, -1]
+
+
+y_train <- train_data$log_salary
+
+
+###############################################################
+# Create Testing Predictor Matrix
+###############################################################
+
+
+x_test <- model.matrix(
+  
+  ~ PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = test_data
+)[, -1]
+
+
+y_test <- test_data$log_salary
+
+
+###############################################################
+# Cross-Validation to Select Lambda
+###############################################################
+
+lasso_cv <- cv.glmnet(
+  
+  x_train,
+  
+  y_train,
+  
+  alpha = 1,
+  
+  nfolds = 10
+)
+
+
+###############################################################
+# Plot Cross-Validation Results
+###############################################################
+
+plot(lasso_cv)
+
+###############################################################
+# Best Lambda Values
+###############################################################
+
+
+lasso_cv$lambda.min
+
+
+lasso_cv$lambda.1se
+
+
+###############################################################
+# Coefficient Path Plot
+###############################################################
+
+
+lasso_path <- glmnet(
+  
+  x_train,
+  
+  y_train,
+  
+  alpha = 1
+)
+
+
+plot(
+  lasso_path,
+  xvar = "lambda",
+  label = TRUE
+)
+
+
+###############################################################
+# Fit Final LASSO Regression Model
+###############################################################
+
+lasso_model <- glmnet(
+  
+  x_train,
+  
+  y_train,
+  
+  alpha = 1,
+  
+  lambda = lasso_cv$lambda.min
+)
+
+###############################################################
+# Display Model Coefficients
+###############################################################
+
+coef(lasso_model)
+
+###############################################################
+# Identify Variables Retained
+###############################################################
+
+
+lasso_coefficients <- coef(lasso_model)
+
+lasso_coefficients[
+  lasso_coefficients != 0
+]
+
+
+###############################################################
+# Predictions on Testing Data
+###############################################################
+
+
+lasso_predictions <- predict(
+  
+  lasso_model,
+  
+  newx = x_test
+)
+
+
+###############################################################
+# Root Mean Squared Error (RMSE)
+###############################################################
+
+
+lasso_rmse <- sqrt(
+  
+  mean(
+    (y_test - lasso_predictions)^2
+  )
+)
+
+lasso_rmse
+
+
+###############################################################
+# Mean Absolute Error (MAE)
+###############################################################
+
+
+lasso_mae <- mean(
+  
+  abs(
+    y_test - lasso_predictions
+  )
+)
+
+lasso_mae
+
+
+###############################################################
+# R-Squared
+###############################################################
+
+
+lasso_r2 <- 1 -
+  
+  sum(
+    (y_test - lasso_predictions)^2
+  ) /
+  
+  sum(
+    (y_test - mean(y_test))^2
+  )
+
+lasso_r2
+
+
+###############################################################
+# Create Performance Summary
+###############################################################
+
+
+lasso_results <- data.frame(
+  
+  Model = "LASSO Regression",
+  
+  R2 = lasso_r2,
+  
+  RMSE = lasso_rmse,
+  
+  MAE = lasso_mae,
+  
+  Lambda = lasso_cv$lambda.min
+  
+)
+
+lasso_results
+
+
+###############################################################
+# Compare with Benchmark Model
+###############################################################
+
+
+lasso_vs_benchmark <- data.frame(
+  
+  Model = c(
+    "Final Multiple Regression",
+    "LASSO Regression"
+  ),
+  
+  R2 = c(
+    benchmark_results$R2,
+    lasso_r2
+  ),
+  
+  RMSE = c(
+    benchmark_results$RMSE,
+    lasso_rmse
+  ),
+  
+  MAE = c(
+    benchmark_results$MAE,
+    lasso_mae
+  )
+)
+
+lasso_vs_benchmark
+```
+
+## Random Forest Regression
+
+The random forest model was used to evaluate whether a nonlinear ensemble approach could improve salary prediction compared with the final multiple regression model. The model included the same broad set of traditional statistics, advanced sabermetric measures, Statcast variables, service time, age, position, and financial tier used in the previous model-selection methods. The random forest contained 500 trees, with eight variables randomly considered at each split.
+
+The random forest explained approximately 85.3% of the variation in log salary, with an R² of 0.8531. Its RMSE was 0.5338, while its MAE was 0.3929. These values were better than those of the final multiple regression model, which had an R² of 0.8266, an RMSE of 0.5800, and an MAE of 0.4231. Based on these in-sample performance measures, the random forest provided a stronger fit to the training data than the final multiple regression model.
+
+The random forest also provided variable importance measures that help identify which predictors contributed most to the model's predictions. Service time was by far the most important variable, with a %IncMSE value of 96.09 and an IncNodePurity value of 1,078.19. Age was the next most important variable, with a %IncMSE of 29.62. These results are consistent with the earlier salary analysis, where service time and contract-related factors were strongly associated with salary.
+
+Among the performance variables, Hard-Hit Percentage had the largest %IncMSE at 16.28, followed by xwOBA at 13.49, xSLG at 13.32, and average exit velocity at 12.93. Barrel Percentage also had a relatively high importance value of 11.78. Traditional statistics such as PA, OPS, BA, HR, RBI, and wOBA also contributed to the model, although their importance values were generally lower than those of service time and age. Launch Angle had the lowest %IncMSE among the continuous performance variables at 2.11, indicating that it contributed relatively little to the random forest's predictive performance.
+
+The importance results also show that the random forest incorporates information from several different types of variables rather than relying on a single performance statistic. Service time and age were particularly influential, while several Statcast measures also contributed meaningfully. This supports the earlier finding that MLB salary is influenced by both player performance and labor-market characteristics.
+
+However, the improvement in fit should be interpreted carefully because these RMSE, MAE, and R² values were calculated using the same training data used to fit the random forest. Therefore, they measure in-sample performance and do not establish that the random forest will perform better on previously unseen players or seasons. This distinction is especially important because random forests can capture nonlinear relationships and complex interactions that may improve training performance without producing the same improvement on new data.
+
+Overall, the random forest produced stronger in-sample performance than the final multiple regression model, with an R² of 0.8531 compared with 0.8266 and lower RMSE and MAE values. Service time was the most important predictor by a substantial margin, followed by age and several performance and Statcast measures. The random forest therefore provides useful evidence that nonlinear relationships may capture additional structure in MLB salary data, while the final evaluation should rely on the same held-out test data used to compare all of the models fairly.
+
+```{r}
+###############################################################
+# Random Forest Regression
+###############################################################
+
+library(randomForest)
+
+###############################################################
+# Random Forest Model for Salary
+###############################################################
+
+
+rf_salary <- randomForest(
+  
+  log_salary ~
+    PA +
+    HR +
+    RBI +
+    SB +
+    BA +
+    OPS +
+    BB_Percent +
+    K_Percent +
+    wRC_plus +
+    wOBA +
+    Off +
+    BsR +
+    Def +
+    xwOBA +
+    xBA +
+    xSLG +
+    Barrel_Percent +
+    HardHit_Percent +
+    EV_Avg +
+    LaunchAngle_Avg +
+    SweetSpot_Percent +
+    Age +
+    Service_Time +
+    Position +
+    financial_tier,
+  
+  data = train_data,
+  
+  ntree = 500,
+  
+  importance = TRUE
+)
+
+
+###############################################################
+# Random Forest Summary
+###############################################################
+
+
+print(rf_salary)
+
+
+###############################################################
+# Predict Salary on Testing Data
+###############################################################
+
+
+rf_salary_predictions <- predict(
+  
+  rf_salary,
+  
+  newdata = test_data
+)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+# Root Mean Squared Error (RMSE)
+
+rf_salary_rmse <- sqrt(
+  
+  mean(
+    (test_data$log_salary - rf_salary_predictions)^2
+  )
+)
+
+rf_salary_rmse
+
+
+# Mean Absolute Error (MAE)
+
+rf_salary_mae <- mean(
+  
+  abs(
+    test_data$log_salary - rf_salary_predictions
+  )
+)
+
+rf_salary_mae
+
+
+
+# R-Squared
+
+rf_salary_r2 <- 1 -
+  
+  sum(
+    (test_data$log_salary - rf_salary_predictions)^2
+  ) /
+  
+  sum(
+    (test_data$log_salary -
+       mean(test_data$log_salary))^2
+  )
+
+rf_salary_r2
+
+
+###############################################################
+# Random Forest Variable Importance
+###############################################################
+
+
+
+importance(rf_salary)
+
+
+#-------------------------------------------------------------
+# Plot Variable Importance
+#-------------------------------------------------------------
+
+
+varImpPlot(rf_salary)
+
+
+###############################################################
+# Random Forest Performance Summary
+###############################################################
+
+
+random_forest_results <- data.frame(
+  
+  Model = "Random Forest",
+  
+  R2 = rf_salary_r2,
+  
+  RMSE = rf_salary_rmse,
+  
+  MAE = rf_salary_mae
+  
+)
+
+random_forest_results
+
+
+###############################################################
+# Compare with Benchmark Model
+###############################################################
+
+
+random_forest_vs_benchmark <- data.frame(
+  
+  Model = c(
+    "Final Multiple Regression",
+    "Random Forest"
+  ),
+  
+  R2 = c(
+    benchmark_results$R2,
+    rf_salary_r2
+  ),
+  
+  RMSE = c(
+    benchmark_results$RMSE,
+    rf_salary_rmse
+  ),
+  
+  MAE = c(
+    benchmark_results$MAE,
+    rf_salary_mae
+  )
+)
+
+random_forest_vs_benchmark
+```
+
+## Surplus Value Analysis
+
+The surplus value analysis uses the final multiple regression model to compare each player's actual salary with the salary predicted by the model on the held-out test data. Because the model predicts log salary, the predictions were converted back to dollar values before calculating the difference between predicted and actual salary. This provides a practical way to examine which player-seasons had salaries substantially different from what the model predicted based on the included performance and labor-market variables.
+
+Positive surplus values indicate player-seasons where the model predicted a salary higher than the player's actual salary. The largest positive difference occurred for Alex Rodriguez in 2015, whose actual salary was $21.0 million while the model predicted approximately $48.4 million, producing a surplus value of approximately $27.4 million. The next largest difference was Carlos Santana in 2024, with an actual salary of $5.25 million and a predicted salary of approximately $23.3 million, resulting in a surplus value of approximately $18.0 million. Other large positive differences included Justin Turner in 2021 at approximately $13.1 million, Jed Lowrie in 2021 at approximately $12.1 million, and Jose Bautista in 2015 at approximately $8.5 million.
+
+The percentage differences provide another way to interpret these results, particularly for players with relatively low salaries. For example, Jed Lowrie's 2021 salary was $1.5 million compared with a predicted salary of approximately $13.6 million, resulting in a surplus percentage of approximately 804.9%. Jesse Winker in 2024 had an actual salary of $2.0 million compared with a predicted salary of approximately $9.3 million, corresponding to a difference of approximately 364.7%. These large percentages occur partly because the denominator is the player's actual salary, so relatively small salaries can produce very large percentage differences.
+
+The largest negative surplus values occurred when the player's actual salary was substantially higher than the model's predicted salary. Carlos Correa in 2022 had an actual salary of $35.1 million compared with a predicted salary of approximately $10.3 million, producing a surplus value of approximately −$24.8 million. Other large negative differences included Seiya Suzuki in 2023 at approximately −$15.9 million, Francisco Lindor in 2021 at approximately −$14.5 million, Bryce Harper in 2018 at approximately −$14.1 million, and Javier Baez in 2023 at approximately −$14.1 million.
+
+These results illustrate that the salary model does not perfectly reproduce actual player salaries. Some player-seasons had salaries substantially above or below the values predicted from the variables included in the model. The differences may reflect factors that are not fully captured by the model, such as contract timing, previous performance, reputation, team-specific circumstances, contract negotiations, or other characteristics not included in the dataset. Therefore, surplus value should be interpreted as a model-based salary difference, rather than as a direct measure of whether a player was objectively overpaid or underpaid.
+
+The analysis also demonstrates the practical value of the salary prediction models developed throughout the project. While the regression models identify the statistical relationships between salary, performance, and labor-market variables, surplus value applies those relationships to individual player-seasons. The results show how the model can be used to identify observations where actual compensation differed substantially from the salary predicted by the model.
+
+Overall, the surplus value analysis provides an additional perspective on MLB salary determination. The largest differences were not limited to one particular type of player or one particular season, suggesting that actual salaries reflect factors beyond the variables included in the regression model. This reinforces an important limitation of the analysis: predicted salary represents the expected salary given the information included in the model, not a definitive valuation of a player's contract.
+
+```{r}
+#-----------------------------------------------------------
+# Surplus Value Analysis
+#-----------------------------------------------------------
+
+
+salary_predictions <- predict(
+  salary_full_model,
+  newdata = test_data
+)
+
+
+#-----------------------------------------------------------
+# Convert Predictions Back to Dollar Salary
+#-----------------------------------------------------------
+
+
+test_data$Predicted_Salary <- exp(salary_predictions)
+
+
+#-----------------------------------------------------------
+# Calculate Surplus Value
+#-----------------------------------------------------------
+
+
+test_data$Surplus_Value <-
+  test_data$Predicted_Salary -
+  test_data$Base_Salary
+
+
+#-----------------------------------------------------------
+# Percentage Difference
+#-----------------------------------------------------------
+
+
+test_data$Surplus_Percent <-
+  (test_data$Surplus_Value /
+     test_data$Base_Salary) * 100
+
+
+#-----------------------------------------------------------
+# View Largest Positive Surplus Values
+#-----------------------------------------------------------
+
+
+surplus_positive <- test_data[
+  order(-test_data$Surplus_Value),
+  c("Full_Name",
+    "Year",
+    "Base_Salary",
+    "Predicted_Salary",
+    "Surplus_Value",
+    "Surplus_Percent")
+]
+
+head(surplus_positive, 10)
+
+
+#-----------------------------------------------------------
+# View Largest Negative Surplus Values
+#-----------------------------------------------------------
+
+
+surplus_negative <- test_data[
+  order(test_data$Surplus_Value),
+  c("Full_Name",
+    "Year",
+    "Base_Salary",
+    "Predicted_Salary",
+    "Surplus_Value",
+    "Surplus_Percent")
+]
+
+head(surplus_negative, 10)
+
+
+#-----------------------------------------------------------
+# Round Salary Values for Easier Interpretation
+#-----------------------------------------------------------
+
+surplus_positive$Base_Salary <-
+  round(surplus_positive$Base_Salary, 0)
+
+surplus_positive$Predicted_Salary <-
+  round(surplus_positive$Predicted_Salary, 0)
+
+surplus_positive$Surplus_Value <-
+  round(surplus_positive$Surplus_Value, 0)
+
+surplus_positive$Surplus_Percent <-
+  round(surplus_positive$Surplus_Percent, 1)
+
+
+surplus_negative$Base_Salary <-
+  round(surplus_negative$Base_Salary, 0)
+
+surplus_negative$Predicted_Salary <-
+  round(surplus_negative$Predicted_Salary, 0)
+
+surplus_negative$Surplus_Value <-
+  round(surplus_negative$Surplus_Value, 0)
+
+surplus_negative$Surplus_Percent <-
+  round(surplus_negative$Surplus_Percent, 1)
+
+surplus_positive
+
+surplus_negative
+```
+
+## Conclusion
+
+This analysis examined several approaches for predicting MLB player salary and compared how well different modeling methods performed using the same set of player and performance variables. The analysis began with the final multiple regression model developed earlier in the project and then examined best subset selection, stepwise selection, Ridge regression, LASSO regression, and Random Forest. This provided a comparison between traditional linear regression methods, methods designed to reduce model complexity or multicollinearity, and a more flexible predictive approach.
+
+The final multiple regression model provided a strong benchmark for the other methods. On the test data, it produced an R² of 0.8266, an RMSE of 0.5800, and an MAE of 0.4231. The model incorporated service time, WAR, age, xwOBA, wRC+, financial tier, position, and the interaction between service time and WAR. These variables reflect both player performance and the labor-market factors that influence MLB salaries, providing an interpretable model for understanding the relationship between player characteristics and compensation.
+
+The model-selection approaches did not improve upon the multiple regression benchmark. Best subset selection and the stepwise procedures identified alternative combinations of predictors, but the resulting models produced lower test-set performance. The backward and stepwise models produced a test R² of approximately 0.6697, an RMSE of 0.8004, and an MAE of 0.6497. These results show that reducing the predictor set did not improve salary prediction in this analysis.
+
+Ridge and LASSO regression also provided useful comparisons because many of the performance variables in the dataset are highly correlated. Ridge regression reduced the size of correlated coefficients while retaining all predictors, while LASSO performed additional variable selection by reducing some coefficients to zero. Ridge produced a test R² of 0.6680, an RMSE of 0.8024, and an MAE of 0.6577. LASSO produced a slightly higher test R² of 0.6767, with an RMSE of 0.7919 and an MAE of 0.6453. Although these methods demonstrated how regularization can address multicollinearity and simplify a model, neither improved upon the final multiple regression model in the test-set results.
+
+The Random Forest model provided a different approach by allowing nonlinear relationships and interactions between predictors to be captured without specifying them directly in the model. It produced a test R² of 0.8531, an RMSE of 0.5338, and an MAE of 0.3929. These results were stronger than those of the final multiple regression benchmark across all three test-set metrics. The Random Forest variable importance results also showed that service time and age were particularly influential, while performance and Statcast measures such as Hard-Hit Percentage, xwOBA, xSLG, Exit Velocity, and Barrel Percentage also contributed substantially to the predictions.
+
+The results from the different models also reinforce several findings from the earlier salary analysis. Player performance is related to salary, but labor-market variables such as service time and age have a particularly strong relationship with compensation. The results also show why multiple types of performance measures were included throughout the project. Traditional statistics, advanced sabermetrics, and Statcast variables each provide different information about player performance, while variables such as service time, position, and financial tier capture additional factors associated with salary.
+
+The surplus value analysis provided an additional application of the salary predictions. Comparing actual salaries with model-predicted salaries identified player-seasons where the observed salary was substantially above or below the salary predicted by the model. These differences should be interpreted as differences between actual and model-predicted salary rather than definitive measures of whether a player was underpaid or overpaid. The analysis therefore demonstrates how salary predictions can be used to examine individual player-seasons while recognizing that the model does not capture every factor that may influence actual compensation.
+
+Overall, the analysis showed that different modeling approaches provide different advantages when predicting MLB salary. The final multiple regression model provided a strong and interpretable benchmark, while best subset, stepwise, Ridge, and LASSO methods did not improve its test-set performance. The Random Forest produced the strongest test-set results among the models examined, suggesting that nonlinear relationships and interactions may provide additional information for predicting salary. At the same time, the regression models remain valuable because their coefficients provide a clearer explanation of how player performance and labor-market characteristics are related to compensation. Together, these results provide a comparison of several modeling approaches and demonstrate how both interpretable statistical models and more flexible predictive methods can be used to study MLB player salaries.
