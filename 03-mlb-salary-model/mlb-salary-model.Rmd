@@ -1,0 +1,4707 @@
+---
+title: "mlb-salary-model"
+author: "Jacob Rouette"
+date: "2026-11-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r} 
+data_path <- Sys.getenv("STATCAST_DATA_PATH")
+
+hitters <- read.csv(file.path(data_path, "FullStatcastData.csv"))
+```
+
+# Introduction to Simple Salary Models
+
+Following the simple linear regression models used to examine player value, the next stage of the project focuses on predicting MLB player salary. While the previous analysis examined factors associated with on-field performance and WAR, this section shifts the focus toward how that performance is translated into financial compensation. Salary represents an organizational decision rather than a direct measure of player production, meaning that compensation can be influenced by both a player's performance and the labor-market conditions surrounding that player.
+
+Unlike WAR, player salary is not determined solely by statistical production. A player's compensation can also depend on service time, contract status, arbitration eligibility, free agency, age, position, team, and other institutional factors. These factors can create substantial differences in salary among players with similar levels of on-field performance. In particular, a player's position within the MLB labor market can affect how much negotiating power they have and how strongly their performance translates into compensation. This makes salary a useful outcome for examining the distinction between player value and how that value is financially rewarded.
+
+The primary objective of this section is to establish a set of baseline salary models using simple linear regression. Individual variables and groups of variables will be evaluated separately to determine how strongly they are associated with player salary. The analysis will examine overall player value through fWAR, traditional offensive statistics, advanced sabermetric measures, Statcast metrics, and player characteristics such as age and service time. By examining these predictors individually, the simple regression models provide an interpretable starting point for determining which factors have the strongest relationships with salary before moving to multiple regression models.
+
+A particular focus of this analysis will be the relationship between performance and labor-market position. Service time will be examined because MLB players do not all enter the free market at the same point in their careers. The analysis will also incorporate the project's contract-regime framework, distinguishing between pre-arbitration, arbitration, and free-agency stages where applicable. This provides a way to examine whether salary differences are explained primarily by differences in player performance or by the institutional structure governing when and how players can negotiate their compensation.
+
+The models will also allow for comparisons between traditional statistics, modern player-evaluation metrics, and labor-market variables. Comparing these groups will help determine whether MLB salaries are more closely associated with observed production, underlying player value, or career and contractual circumstances. For example, a strong relationship between fWAR and salary would suggest that overall player value is closely connected to compensation, while a stronger relationship with service time or contract regime would indicate that institutional factors play an important role in determining how that value is rewarded.
+
+The findings from this section will provide the foundation for the multiple salary models developed in the next section. The strongest individual predictors identified through the simple regressions will help guide variable selection for the baseline, advanced, nonlinear, and interaction models. Ultimately, this analysis will contribute to the project's central question: Does Major League Baseball primarily pay players based on performance, or does the structure of the MLB labor market play an equally important role in determining salary?
+
+## Salary vs fWAR
+
+The first salary model examined the relationship between player salary and fWAR using simple linear regression. The raw salary model produced a statistically significant positive relationship between fWAR and salary. The estimated intercept was approximately $6.45 million, representing the predicted salary for a player with a WAR of zero. The coefficient for WAR was approximately $611,685, indicating that, on average, each additional unit of WAR was associated with an increase of approximately $612,000 in player salary. This relationship was statistically significant, with a p-value of 1.94 × 10⁻⁷. The 95% confidence interval for the WAR coefficient ranged from approximately $382,320 to $841,050, providing further evidence of a positive association between player value and compensation.
+
+Despite the statistical significance of the WAR coefficient, the model explained very little of the overall variation in player salaries. The model had an R² of 0.0195 and an adjusted R² of 0.0188, meaning that fWAR alone explained only about 1.95% of the variation in salary. The RMSE was approximately $8.60 million, while the MAE was approximately $6.85 million. The relatively large prediction errors compared with the estimated effect of WAR demonstrate that salary differences among MLB players cannot be adequately explained by overall player value alone.
+
+Because MLB salaries are highly variable, a second model was estimated using the natural logarithm of salary as the response variable. The log transformation reduced the influence of extremely large contracts and provided an alternative way to evaluate the relationship between fWAR and compensation. The resulting model also found a statistically significant positive relationship between WAR and salary. The estimated WAR coefficient was 0.0439, with a p-value of 0.0184. This suggests that higher-WAR players tend to have higher salaries even after accounting for the skewness of the salary distribution. The 95% confidence interval for the WAR coefficient ranged from 0.0074 to 0.0804.
+
+However, the explanatory power of the log-salary model was even weaker than that of the raw salary model. The model produced an R² of 0.0040 and an adjusted R² of 0.0033, meaning that WAR explained only approximately 0.4% of the variation in log salary. The RMSE was 1.3688 log-salary units and the MAE was 1.2091 log-salary units. Because these error measures are expressed on the log-salary scale, they should not be directly compared with the dollar-based RMSE and MAE from the raw salary model.
+
+Overall, both models provide evidence that fWAR is positively associated with MLB salary, but the relationship is much weaker than might be expected if performance were the primary determinant of compensation. The raw salary model explains approximately 2% of salary variation, while the log-salary model explains less than 1%. This indicates that although better-performing players generally tend to earn more, substantial salary differences remain unexplained by fWAR alone.
+
+These findings support the broader labor-market focus of this project. The weak explanatory power of fWAR suggests that salary is influenced by factors beyond on-field performance, such as service time, contract regime, arbitration and free-agency status, position, age, and other institutional factors. Therefore, fWAR provides a useful starting point for salary modeling, but it is unlikely to be sufficient as a standalone predictor. The following sections will examine whether traditional statistics, sabermetric measures, Statcast metrics, and especially service time and contract-regime factors provide additional insight into how MLB players are compensated.
+
+```{r}
+###############################################################
+# Salary vs fWAR
+###############################################################
+
+
+###############################################################
+# Create Log Salary Variable
+###############################################################
+
+hitters$log_salary <- log(hitters$Base_Salary)
+
+###############################################################
+# Model 1: Base Salary ~ WAR
+###############################################################
+
+salary_model <- lm(
+  Base_Salary ~ WAR,
+  data = hitters
+)
+
+summary(salary_model)
+
+
+
+###############################################################
+# Regression Coefficients
+###############################################################
+
+coef(salary_model)
+
+###############################################################
+# Confidence Intervals for Coefficients
+###############################################################
+
+confint(salary_model)
+
+###############################################################
+# Predicted Salary Values
+###############################################################
+
+salary_predictions <- predict(salary_model)
+
+head(salary_predictions)
+
+###############################################################
+# Model Performance Metrics
+###############################################################
+
+# Root Mean Squared Error (RMSE)
+
+salary_rmse <- sqrt(
+  mean(residuals(salary_model)^2)
+)
+
+salary_rmse
+
+
+# Mean Absolute Error (MAE)
+
+salary_mae <- mean(
+  abs(residuals(salary_model))
+)
+
+salary_mae
+
+###############################################################
+# Residual Standard Error
+###############################################################
+
+salary_rse <- summary(salary_model)$sigma
+
+salary_rse
+
+###############################################################
+# R-Squared
+###############################################################
+
+salary_r_squared <- summary(salary_model)$r.squared
+
+salary_r_squared
+
+###############################################################
+# Adjusted R-Squared
+###############################################################
+
+salary_adj_r_squared <- summary(salary_model)$adj.r.squared
+
+salary_adj_r_squared
+
+###############################################################
+# Model 2: Log(Base Salary) ~ WAR
+###############################################################
+
+log_salary_model <- lm(
+  log_salary ~ WAR,
+  data = hitters
+)
+
+summary(log_salary_model)
+
+###############################################################
+# Regression Coefficients
+###############################################################
+
+coef(log_salary_model)
+
+###############################################################
+# Confidence Intervals for Coefficients
+###############################################################
+
+confint(log_salary_model)
+
+###############################################################
+# Predicted Log Salary Values
+###############################################################
+
+log_salary_predictions <- predict(log_salary_model)
+
+head(log_salary_predictions)
+
+###############################################################
+# Model Performance Metrics
+###############################################################
+
+# Root Mean Squared Error (RMSE)
+
+log_salary_rmse <- sqrt(
+  mean(residuals(log_salary_model)^2)
+)
+
+log_salary_rmse
+
+
+# Mean Absolute Error (MAE)
+
+log_salary_mae <- mean(
+  abs(residuals(log_salary_model))
+)
+
+log_salary_mae
+
+
+###############################################################
+# Residual Standard Error
+###############################################################
+
+log_salary_rse <- summary(log_salary_model)$sigma
+
+log_salary_rse
+
+###############################################################
+# R-Squared
+###############################################################
+
+log_salary_r_squared <- summary(log_salary_model)$r.squared
+
+log_salary_r_squared
+
+###############################################################
+# Adjusted R-Squared
+###############################################################
+
+log_salary_adj_r_squared <- summary(log_salary_model)$adj.r.squared
+
+log_salary_adj_r_squared
+
+###############################################################
+# Compare Salary Models
+###############################################################
+
+salary_model_comparison <- data.frame(
+  Model = c(
+    "Salary ~ WAR",
+    "Log(Salary) ~ WAR"
+  ),
+  
+  R_Squared = c(
+    salary_r_squared,
+    log_salary_r_squared
+  ),
+  
+  Adjusted_R_Squared = c(
+    salary_adj_r_squared,
+    log_salary_adj_r_squared
+  ),
+  
+  RSE = c(
+    salary_rse,
+    log_salary_rse
+  ),
+  
+  RMSE = c(
+    salary_rmse,
+    log_salary_rmse
+  ),
+  
+  MAE = c(
+    salary_mae,
+    log_salary_mae
+  )
+)
+
+salary_model_comparison
+
+###############################################################
+# Scatterplot: Salary vs WAR
+###############################################################
+
+plot(
+  hitters$WAR,
+  hitters$Base_Salary,
+  main = "MLB Player Salary vs fWAR",
+  xlab = "fWAR",
+  ylab = "Base Salary"
+)
+
+
+abline(
+  salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+###############################################################
+# Scatterplot: Log Salary vs WAR
+###############################################################
+
+plot(
+  hitters$WAR,
+  hitters$log_salary,
+  main = "Log MLB Player Salary vs fWAR",
+  xlab = "fWAR",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  log_salary_model,
+  col = "red",
+  lwd = 2
+)
+
+###############################################################
+# Actual vs Predicted Salary
+###############################################################
+
+plot(
+  hitters$Base_Salary,
+  salary_predictions,
+  main = "Actual vs Predicted Salary Using fWAR",
+  xlab = "Actual Base Salary",
+  ylab = "Predicted Base Salary"
+)
+
+abline(
+  a = 0,
+  b = 1,
+  col = "blue",
+  lwd = 2
+)
+```
+
+## Traditional Statistics
+
+The next set of simple salary models examined whether traditional offensive statistics were associated with MLB player compensation. Six statistics were evaluated independently: home runs, runs batted in, runs scored, batting average, OPS, and stolen bases. Each model used log-transformed salary as the response variable to reduce the influence of extremely large contracts and provide a more comparable measure of the relationship between performance and compensation.
+
+The model using home runs found a statistically significant positive relationship with salary. The estimated coefficient for home runs was 0.0239, with a p-value of 5.48 × 10⁻¹¹. This indicates that players with more home runs tended to have higher salaries. The model's R² was 0.0308, meaning that home runs alone explained approximately 3.08% of the variation in log salary. Although the relationship was statistically significant, the relatively low R² indicates that home run production by itself provides limited explanatory power for player compensation.
+
+The RBI model produced the strongest relationship among the traditional statistics examined. The estimated coefficient was 0.0141, with a p-value of 1.22 × 10⁻¹⁴, indicating a statistically significant positive association between RBI and salary. The model had an R² of 0.0424 and an adjusted R² of 0.0417, meaning that RBI alone explained approximately 4.24% of the variation in log salary. The 95% confidence interval for the RBI coefficient ranged from 0.0105 to 0.0176. While RBI was the strongest individual traditional predictor according to R², the model still left the overwhelming majority of salary variation unexplained.
+
+The model using runs scored also showed a statistically significant positive relationship with salary. The coefficient for runs was 0.0111, with a p-value of 1.04 × 10⁻⁷. Its R² was 0.0204, indicating that runs explained approximately 2.04% of the variation in log salary. The 95% confidence interval for the coefficient ranged from 0.0071 to 0.0152, supporting a positive association between run production and compensation.
+
+The batting average model produced a statistically significant positive relationship as well, with a coefficient of 3.6180 and a p-value of 0.00868. The confidence interval for the coefficient ranged from 0.9174 to 6.3185. However, batting average had very little explanatory power, with an R² of only 0.0050 and an adjusted R² of 0.0043. Thus, batting average explained approximately 0.50% of the variation in log salary, making it one of the weakest traditional predictors examined.
+
+The OPS model also showed a statistically significant positive relationship with salary. The coefficient for OPS was 2.6026, with a p-value of 5.59 × 10⁻¹⁰ and a 95% confidence interval from 1.7852 to 3.4199. The model produced an R² of 0.0276, meaning that OPS explained approximately 2.76% of the variation in log salary. Although OPS incorporates both offensive production and on-base ability more comprehensively than batting average, its individual explanatory power remained relatively limited in this analysis.
+
+The final traditional-statistic model examined stolen bases and produced a different relationship from the other variables. The coefficient for stolen bases was −0.0166, with a p-value of 2.78 × 10⁻⁶, indicating a statistically significant negative association between stolen bases and salary. The 95% confidence interval ranged from −0.0236 to −0.0097. The R² was 0.0159, meaning that stolen bases explained approximately 1.59% of the variation in log salary. The negative coefficient should not necessarily be interpreted as evidence that stolen bases directly reduce player salaries. Instead, it indicates that within this dataset, players with more stolen bases tended to have lower salaries when considering stolen bases as the sole predictor. This relationship may reflect differences in player types, positions, career stages, or other factors that are not accounted for in a simple one-predictor model.
+
+When the six traditional statistics were compared, RBI produced the highest R² at 0.0424, followed by home runs at 0.0308, OPS at 0.0276, runs at 0.0204, stolen bases at 0.0159, and batting average at 0.0050. Therefore, RBI was the strongest individual traditional statistic in terms of explanatory power, although even the strongest model explained only about 4% of the variation in log salary.
+
+Overall, these results show that traditional offensive statistics are statistically associated with MLB salary, but their individual relationships with compensation are weak. Every traditional statistic examined was statistically significant, yet each had an R² below 0.05. This distinction between statistical significance and explanatory power is important: with a sample of 1,377 players, relatively small relationships can be detected as statistically significant, but that does not mean the variable explains a substantial portion of salary differences.
+
+The scatterplots generally supported the regression results, showing positive relationships between salary and home runs, RBI, runs, batting average, and OPS, while the stolen-base relationship showed a negative trend. However, the plots also demonstrated substantial variation around each regression line, consistent with the relatively low R² values. These results suggest that traditional performance statistics alone are insufficient for explaining MLB compensation and reinforce the need to examine sabermetric measures, Statcast metrics, and especially labor-market factors such as service time and contract regime in the following sections.
+
+```{r}
+###############################################################
+# Traditional Statistics
+###############################################################
+
+
+###############################################################
+# Model 1: log(Salary) ~ Home Runs
+###############################################################
+
+hr_salary_model <- lm(
+  log_salary ~ HR,
+  data = hitters
+)
+
+summary(hr_salary_model)
+
+# View regression coefficients
+coef(hr_salary_model)
+
+# Calculate 95% confidence intervals
+confint(hr_salary_model)
+
+###############################################################
+# Model Performance — Home Runs
+###############################################################
+
+hr_salary_r_squared <- summary(hr_salary_model)$r.squared
+
+hr_salary_adj_r_squared <- summary(hr_salary_model)$adj.r.squared
+
+hr_salary_rse <- summary(hr_salary_model)$sigma
+
+# RMSE
+hr_salary_rmse <- sqrt(
+  mean(residuals(hr_salary_model)^2)
+)
+
+# MAE
+hr_salary_mae <- mean(
+  abs(residuals(hr_salary_model))
+)
+
+hr_salary_r_squared
+hr_salary_adj_r_squared
+hr_salary_rse
+hr_salary_rmse
+hr_salary_mae
+
+###############################################################
+# Model 2: log(Salary) ~ RBI
+###############################################################
+
+rbi_salary_model <- lm(
+  log_salary ~ RBI,
+  data = hitters
+)
+
+summary(rbi_salary_model)
+
+# View regression coefficients
+coef(rbi_salary_model)
+
+# Calculate 95% confidence intervals
+confint(rbi_salary_model)
+
+###############################################################
+# Model Performance — RBI
+###############################################################
+
+rbi_salary_r_squared <- summary(rbi_salary_model)$r.squared
+
+rbi_salary_adj_r_squared <- summary(rbi_salary_model)$adj.r.squared
+
+rbi_salary_rse <- summary(rbi_salary_model)$sigma
+
+# RMSE
+rbi_salary_rmse <- sqrt(
+  mean(residuals(rbi_salary_model)^2)
+)
+
+# MAE
+rbi_salary_mae <- mean(
+  abs(residuals(rbi_salary_model))
+)
+
+rbi_salary_r_squared
+rbi_salary_adj_r_squared
+rbi_salary_rse
+rbi_salary_rmse
+rbi_salary_mae
+
+###############################################################
+# Model 3: log(Salary) ~ Runs
+###############################################################
+
+runs_salary_model <- lm(
+  log_salary ~ R,
+  data = hitters
+)
+
+summary(runs_salary_model)
+
+# View regression coefficients
+coef(runs_salary_model)
+
+# Calculate 95% confidence intervals
+confint(runs_salary_model)
+
+###############################################################
+# Model Performance — Runs
+###############################################################
+
+runs_salary_r_squared <- summary(runs_salary_model)$r.squared
+
+runs_salary_adj_r_squared <- summary(runs_salary_model)$adj.r.squared
+
+runs_salary_rse <- summary(runs_salary_model)$sigma
+
+# RMSE
+runs_salary_rmse <- sqrt(
+  mean(residuals(runs_salary_model)^2)
+)
+
+# MAE
+runs_salary_mae <- mean(
+  abs(residuals(runs_salary_model))
+)
+
+runs_salary_r_squared
+runs_salary_adj_r_squared
+runs_salary_rse
+runs_salary_rmse
+runs_salary_mae
+
+###############################################################
+# Model 4: log(Salary) ~ Batting Average
+###############################################################
+
+ba_salary_model <- lm(
+  log_salary ~ BA,
+  data = hitters
+)
+
+summary(ba_salary_model)
+
+# View regression coefficients
+coef(ba_salary_model)
+
+# Calculate 95% confidence intervals
+confint(ba_salary_model)
+
+###############################################################
+# Model Performance — Batting Average
+###############################################################
+
+ba_salary_r_squared <- summary(ba_salary_model)$r.squared
+
+ba_salary_adj_r_squared <- summary(ba_salary_model)$adj.r.squared
+
+ba_salary_rse <- summary(ba_salary_model)$sigma
+
+# RMSE
+ba_salary_rmse <- sqrt(
+  mean(residuals(ba_salary_model)^2)
+)
+
+# MAE
+ba_salary_mae <- mean(
+  abs(residuals(ba_salary_model))
+)
+
+ba_salary_r_squared
+ba_salary_adj_r_squared
+ba_salary_rse
+ba_salary_rmse
+ba_salary_mae
+
+###############################################################
+# Model 5: log(Salary) ~ OPS
+###############################################################
+
+ops_salary_model <- lm(
+  log_salary ~ OPS,
+  data = hitters
+)
+
+summary(ops_salary_model)
+
+# View regression coefficients
+coef(ops_salary_model)
+
+# Calculate 95% confidence intervals
+confint(ops_salary_model)
+
+###############################################################
+# Model Performance — OPS
+###############################################################
+
+ops_salary_r_squared <- summary(ops_salary_model)$r.squared
+
+ops_salary_adj_r_squared <- summary(ops_salary_model)$adj.r.squared
+
+ops_salary_rse <- summary(ops_salary_model)$sigma
+
+# RMSE
+ops_salary_rmse <- sqrt(
+  mean(residuals(ops_salary_model)^2)
+)
+
+# MAE
+ops_salary_mae <- mean(
+  abs(residuals(ops_salary_model))
+)
+
+ops_salary_r_squared
+ops_salary_adj_r_squared
+ops_salary_rse
+ops_salary_rmse
+ops_salary_mae
+
+###############################################################
+# Model 6: log(Salary) ~ Stolen Bases
+###############################################################
+
+sb_salary_model <- lm(
+  log_salary ~ SB,
+  data = hitters
+)
+
+summary(sb_salary_model)
+
+# View regression coefficients
+coef(sb_salary_model)
+
+# Calculate 95% confidence intervals
+confint(sb_salary_model)
+
+###############################################################
+# Model Performance — Stolen Bases
+###############################################################
+
+sb_salary_r_squared <- summary(sb_salary_model)$r.squared
+
+sb_salary_adj_r_squared <- summary(sb_salary_model)$adj.r.squared
+
+sb_salary_rse <- summary(sb_salary_model)$sigma
+
+# RMSE
+sb_salary_rmse <- sqrt(
+  mean(residuals(sb_salary_model)^2)
+)
+
+# MAE
+sb_salary_mae <- mean(
+  abs(residuals(sb_salary_model))
+)
+
+sb_salary_r_squared
+sb_salary_adj_r_squared
+sb_salary_rse
+sb_salary_rmse
+sb_salary_mae
+
+###############################################################
+# Compare Traditional Salary Models
+###############################################################
+
+traditional_salary_comparison <- data.frame(
+  
+  Model = c(
+    "Log(Salary) ~ HR",
+    "Log(Salary) ~ RBI",
+    "Log(Salary) ~ Runs",
+    "Log(Salary) ~ BA",
+    "Log(Salary) ~ OPS",
+    "Log(Salary) ~ SB"
+  ),
+  
+  R_Squared = c(
+    hr_salary_r_squared,
+    rbi_salary_r_squared,
+    runs_salary_r_squared,
+    ba_salary_r_squared,
+    ops_salary_r_squared,
+    sb_salary_r_squared
+  ),
+  
+  Adjusted_R_Squared = c(
+    hr_salary_adj_r_squared,
+    rbi_salary_adj_r_squared,
+    runs_salary_adj_r_squared,
+    ba_salary_adj_r_squared,
+    ops_salary_adj_r_squared,
+    sb_salary_adj_r_squared
+  ),
+  
+  RSE = c(
+    hr_salary_rse,
+    rbi_salary_rse,
+    runs_salary_rse,
+    ba_salary_rse,
+    ops_salary_rse,
+    sb_salary_rse
+  ),
+  
+  RMSE = c(
+    hr_salary_rmse,
+    rbi_salary_rmse,
+    runs_salary_rmse,
+    ba_salary_rmse,
+    ops_salary_rmse,
+    sb_salary_rmse
+  ),
+  
+  MAE = c(
+    hr_salary_mae,
+    rbi_salary_mae,
+    runs_salary_mae,
+    ba_salary_mae,
+    ops_salary_mae,
+    sb_salary_mae
+  )
+)
+
+traditional_salary_comparison
+
+###############################################################
+# Identify Strongest Traditional Salary Model
+###############################################################
+
+traditional_salary_comparison[
+  which.max(traditional_salary_comparison$R_Squared),
+]
+
+###############################################################
+# Scatterplots with Regression Lines
+###############################################################
+
+# Home Runs
+
+plot(
+  hitters$HR,
+  hitters$log_salary,
+  main = "Log Salary vs Home Runs",
+  xlab = "Home Runs",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  hr_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# RBI
+
+plot(
+  hitters$RBI,
+  hitters$log_salary,
+  main = "Log Salary vs Runs Batted In",
+  xlab = "Runs Batted In",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  rbi_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Runs
+
+plot(
+  hitters$R,
+  hitters$log_salary,
+  main = "Log Salary vs Runs",
+  xlab = "Runs",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  runs_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Batting Average
+
+plot(
+  hitters$BA,
+  hitters$log_salary,
+  main = "Log Salary vs Batting Average",
+  xlab = "Batting Average",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  ba_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# OPS
+
+plot(
+  hitters$OPS,
+  hitters$log_salary,
+  main = "Log Salary vs OPS",
+  xlab = "OPS",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  ops_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Stolen Bases
+
+plot(
+  hitters$SB,
+  hitters$log_salary,
+  main = "Log Salary vs Stolen Bases",
+  xlab = "Stolen Bases",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  sb_salary_model,
+  col = "blue",
+  lwd = 2
+)
+```
+
+## Sabermetrics
+
+The sabermetric models examine whether advanced measures of player performance are associated with MLB salary. The five variables considered were wRC+, wOBA, Off, BsR, and Def. As in the previous sections, log salary was used as the response variable to reduce the influence of extremely large salaries and provide a more consistent scale for comparison.
+
+All five sabermetric variables were statistically significant predictors of log salary. However, the relatively low R² values across all five models indicate that none of these individual measures explains a large portion of the variation in player salaries.
+
+wRC+ had a positive and statistically significant relationship with log salary. The estimated coefficient was 0.01119, with a p-value of 9.42 × 10⁻¹² and a 95% confidence interval of [0.00800, 0.01439]. The model had an R² of 0.0332 and an adjusted R² of 0.0325, meaning that wRC+ explained approximately 3.32% of the variation in log salary. The scatterplot also showed an increasing trend, indicating that players with higher offensive production relative to league average generally tended to have higher salaries.
+
+wOBA also had a positive and statistically significant relationship with log salary. Its coefficient was 7.1820, with a p-value of 1.21 × 10⁻¹⁰ and a 95% confidence interval of [5.011, 9.353]. The model had an R² of 0.0297 and an adjusted R² of 0.0290, explaining approximately 2.97% of the variation in log salary. The scatterplot showed an increasing relationship between wOBA and salary, suggesting that players with greater overall offensive value tended to have higher salaries.
+
+The Off metric was also positively associated with salary. The coefficient was 0.01210, with a p-value of 1.70 × 10⁻⁸ and a 95% confidence interval of [0.00792, 0.01629]. However, the model explained only 2.29% of the variation in log salary, with an adjusted R² of 0.0222. The scatterplot showed an increasing trend, consistent with the positive coefficient. This suggests that greater offensive contribution was generally associated with higher salaries, although the relationship was relatively weak when considered by itself.
+
+In contrast, BsR had a statistically significant negative relationship with log salary. The coefficient was -0.08414, with a p-value of 3.65 × 10⁻¹³ and a 95% confidence interval of [-0.10663, -0.06165]. BsR had the highest R² of the five sabermetric models at 0.0377, with an adjusted R² of 0.0370, meaning it explained approximately 3.77% of the variation in log salary. The scatterplot also showed a decreasing trend. However, this result should not be interpreted as meaning that better baserunning causes players to earn less. The negative association may reflect other differences between players, such as position, offensive production, age, or service time, that are not included in this simple model.
+
+Finally, Def had a statistically significant negative relationship with log salary. The coefficient was -0.02385, with a p-value of 1.06 × 10⁻¹⁰ and a 95% confidence interval of [-0.03103, -0.01666]. The model produced an R² of 0.0299 and an adjusted R² of 0.0292, explaining approximately 2.99% of the variation in log salary. The scatterplot showed a decreasing trend, consistent with the negative coefficient. As with BsR, this relationship should not be interpreted causally because the model does not control for other characteristics that could influence both defensive value and salary.
+
+Overall, BsR had the strongest explanatory power among the five sabermetric measures, with an R² of 0.0377, followed by wRC+ at 0.0332, Def at 0.0299, wOBA at 0.0297, and Off at 0.0229. Despite all five variables being statistically significant, each explained less than 4% of the variation in log salary individually.
+
+These results are similar to the traditional-statistics models from the previous section. Statistical significance does not necessarily mean that a variable is a strong predictor of salary. With a relatively large sample, even modest relationships can produce very small p-values. The low R² values indicate that sabermetric performance measures alone do not explain much of MLB salary variation.
+
+The results therefore provide additional support for the idea that MLB salaries are influenced by factors beyond player performance. While offensive measures such as wRC+, wOBA, and Off show positive relationships with salary, the relatively weak explanatory power of these models suggests that labor-market factors such as service time, arbitration status, free agency, age, and other contractual considerations may play a much larger role in determining salary. These factors will be examined more directly in the following sections.
+
+```{r}
+###############################################################
+# Sabermetrics
+###############################################################
+
+
+###############################################################
+# Model 1: log(Salary) ~ wRC+
+###############################################################
+
+wrc_salary_model <- lm(
+  log_salary ~ wRC_plus,
+  data = hitters
+)
+
+summary(wrc_salary_model)
+
+# View regression coefficients
+coef(wrc_salary_model)
+
+# Calculate 95% confidence intervals
+confint(wrc_salary_model)
+
+
+###############################################################
+# Model Performance — wRC+
+###############################################################
+
+wrc_salary_r_squared <- summary(wrc_salary_model)$r.squared
+
+wrc_salary_adj_r_squared <- summary(wrc_salary_model)$adj.r.squared
+
+wrc_salary_rse <- summary(wrc_salary_model)$sigma
+
+# RMSE
+wrc_salary_rmse <- sqrt(
+  mean(residuals(wrc_salary_model)^2)
+)
+
+# MAE
+wrc_salary_mae <- mean(
+  abs(residuals(wrc_salary_model))
+)
+
+wrc_salary_r_squared
+wrc_salary_adj_r_squared
+wrc_salary_rse
+wrc_salary_rmse
+wrc_salary_mae
+
+###############################################################
+# Model 2: log(Salary) ~ wOBA
+###############################################################
+
+woba_salary_model <- lm(
+  log_salary ~ wOBA,
+  data = hitters
+)
+
+summary(woba_salary_model)
+
+# View regression coefficients
+coef(woba_salary_model)
+
+# Calculate 95% confidence intervals
+confint(woba_salary_model)
+
+###############################################################
+# Model Performance — wOBA
+###############################################################
+
+woba_salary_r_squared <- summary(woba_salary_model)$r.squared
+
+woba_salary_adj_r_squared <- summary(woba_salary_model)$adj.r.squared
+
+woba_salary_rse <- summary(woba_salary_model)$sigma
+
+# RMSE
+woba_salary_rmse <- sqrt(
+  mean(residuals(woba_salary_model)^2)
+)
+
+# MAE
+woba_salary_mae <- mean(
+  abs(residuals(woba_salary_model))
+)
+
+woba_salary_r_squared
+woba_salary_adj_r_squared
+woba_salary_rse
+woba_salary_rmse
+woba_salary_mae
+
+###############################################################
+# Model 3: log(Salary) ~ Offensive Runs
+###############################################################
+
+off_salary_model <- lm(
+  log_salary ~ Off,
+  data = hitters
+)
+
+summary(off_salary_model)
+
+# View regression coefficients
+coef(off_salary_model)
+
+# Calculate 95% confidence intervals
+confint(off_salary_model)
+
+###############################################################
+# Model Performance — Offensive Runs
+###############################################################
+
+off_salary_r_squared <- summary(off_salary_model)$r.squared
+
+off_salary_adj_r_squared <- summary(off_salary_model)$adj.r.squared
+
+off_salary_rse <- summary(off_salary_model)$sigma
+
+# RMSE
+off_salary_rmse <- sqrt(
+  mean(residuals(off_salary_model)^2)
+)
+
+# MAE
+off_salary_mae <- mean(
+  abs(residuals(off_salary_model))
+)
+
+off_salary_r_squared
+off_salary_adj_r_squared
+off_salary_rse
+off_salary_rmse
+off_salary_mae
+
+###############################################################
+# Model 4: log(Salary) ~ Baserunning Runs
+###############################################################
+
+bsr_salary_model <- lm(
+  log_salary ~ BsR,
+  data = hitters
+)
+
+summary(bsr_salary_model)
+
+# View regression coefficients
+coef(bsr_salary_model)
+
+# Calculate 95% confidence intervals
+confint(bsr_salary_model)
+
+###############################################################
+# Model Performance — Baserunning Runs
+###############################################################
+
+bsr_salary_r_squared <- summary(bsr_salary_model)$r.squared
+
+bsr_salary_adj_r_squared <- summary(bsr_salary_model)$adj.r.squared
+
+bsr_salary_rse <- summary(bsr_salary_model)$sigma
+
+# RMSE
+bsr_salary_rmse <- sqrt(
+  mean(residuals(bsr_salary_model)^2)
+)
+
+# MAE
+bsr_salary_mae <- mean(
+  abs(residuals(bsr_salary_model))
+)
+
+bsr_salary_r_squared
+bsr_salary_adj_r_squared
+bsr_salary_rse
+bsr_salary_rmse
+bsr_salary_mae
+
+###############################################################
+# Model 5: log(Salary) ~ Defensive Runs
+###############################################################
+
+def_salary_model <- lm(
+  log_salary ~ Def,
+  data = hitters
+)
+
+summary(def_salary_model)
+
+# View regression coefficients
+coef(def_salary_model)
+
+# Calculate 95% confidence intervals
+confint(def_salary_model)
+
+###############################################################
+# Model Performance — Defensive Runs
+###############################################################
+
+def_salary_r_squared <- summary(def_salary_model)$r.squared
+
+def_salary_adj_r_squared <- summary(def_salary_model)$adj.r.squared
+
+def_salary_rse <- summary(def_salary_model)$sigma
+
+# RMSE
+def_salary_rmse <- sqrt(
+  mean(residuals(def_salary_model)^2)
+)
+
+# MAE
+def_salary_mae <- mean(
+  abs(residuals(def_salary_model))
+)
+
+def_salary_r_squared
+def_salary_adj_r_squared
+def_salary_rse
+def_salary_rmse
+def_salary_mae
+
+###############################################################
+# Compare Sabermetric Salary Models
+###############################################################
+
+sabermetric_salary_comparison <- data.frame(
+  
+  Model = c(
+    "Log(Salary) ~ wRC+",
+    "Log(Salary) ~ wOBA",
+    "Log(Salary) ~ Off",
+    "Log(Salary) ~ BsR",
+    "Log(Salary) ~ Def"
+  ),
+  
+  R_Squared = c(
+    wrc_salary_r_squared,
+    woba_salary_r_squared,
+    off_salary_r_squared,
+    bsr_salary_r_squared,
+    def_salary_r_squared
+  ),
+  
+  Adjusted_R_Squared = c(
+    wrc_salary_adj_r_squared,
+    woba_salary_adj_r_squared,
+    off_salary_adj_r_squared,
+    bsr_salary_adj_r_squared,
+    def_salary_adj_r_squared
+  ),
+  
+  RSE = c(
+    wrc_salary_rse,
+    woba_salary_rse,
+    off_salary_rse,
+    bsr_salary_rse,
+    def_salary_rse
+  ),
+  
+  RMSE = c(
+    wrc_salary_rmse,
+    woba_salary_rmse,
+    off_salary_rmse,
+    bsr_salary_rmse,
+    def_salary_rmse
+  ),
+  
+  MAE = c(
+    wrc_salary_mae,
+    woba_salary_mae,
+    off_salary_mae,
+    bsr_salary_mae,
+    def_salary_mae
+  )
+)
+
+sabermetric_salary_comparison
+
+###############################################################
+# Identify Strongest Sabermetric Salary Model
+###############################################################
+
+sabermetric_salary_comparison[
+  which.max(sabermetric_salary_comparison$R_Squared),
+]
+
+###############################################################
+# Scatterplots with Regression Lines
+###############################################################
+
+# wRC+
+
+plot(
+  hitters$wRC_plus,
+  hitters$log_salary,
+  main = "Log Salary vs wRC+",
+  xlab = "wRC+",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  wrc_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# wOBA
+
+plot(
+  hitters$wOBA,
+  hitters$log_salary,
+  main = "Log Salary vs wOBA",
+  xlab = "wOBA",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  woba_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Offensive Runs
+
+plot(
+  hitters$Off,
+  hitters$log_salary,
+  main = "Log Salary vs Offensive Runs",
+  xlab = "Offensive Runs",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  off_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Baserunning Runs
+
+plot(
+  hitters$BsR,
+  hitters$log_salary,
+  main = "Log Salary vs Baserunning Runs",
+  xlab = "Baserunning Runs",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  bsr_salary_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+# Defensive Runs
+
+plot(
+  hitters$Def,
+  hitters$log_salary,
+  main = "Log Salary vs Defensive Runs",
+  xlab = "Defensive Runs",
+  ylab = "Log(Base Salary)"
+)
+
+abline(
+  def_salary_model,
+  col = "blue",
+  lwd = 2
+)
+```
+
+## Statcast
+
+The Statcast models examine whether measures of contact quality and expected offensive performance are associated with MLB player salaries. The eight variables considered were xwOBA, xBA, xSLG, xISO, Barrel Percentage, Hard Hit Percentage, Average Exit Velocity, and Average Launch Angle. Each variable was modeled individually against log salary to determine whether Statcast-based measures of performance have a meaningful relationship with player compensation.
+
+All eight Statcast variables were statistically significant predictors of log salary, although the strength of their relationships varied considerably. xwOBA was the strongest individual Statcast predictor. Its coefficient was 10.9371, with a p-value of less than 2.2 × 10⁻¹⁶ and a 95% confidence interval of [8.8868, 12.9875]. The model had an R² of 0.0738 and an adjusted R² of 0.0731, meaning xwOBA explained approximately 7.38% of the variation in log salary. The scatterplot also showed a clear increasing relationship between xwOBA and salary, indicating that players with higher expected offensive value generally tended to have higher salaries.
+
+xSLG was the second strongest Statcast measure, with an R² of 0.0579 and an adjusted R² of 0.0572. Its coefficient was 4.8798, with a p-value of less than 2.2 × 10⁻¹⁶ and a 95% confidence interval of [3.8380, 5.9215]. The scatterplot showed an increasing relationship, suggesting that players with higher expected slugging percentages generally received higher salaries.
+
+xISO also had a positive and statistically significant relationship with log salary. Its coefficient was 4.8594, with a p-value of 6.94 × 10⁻¹⁵ and a 95% confidence interval of [3.6487, 6.0701]. The model had an R² of 0.0431 and an adjusted R² of 0.0425, explaining approximately 4.31% of the variation in log salary. The increasing scatterplot supports the positive relationship between expected power production and salary.
+
+Hard Hit Percentage had a positive relationship with salary, with a coefficient of 0.03541 and a p-value of 3.19 × 10⁻¹⁴. Its 95% confidence interval was [0.02636, 0.04447]. The model produced an R² of 0.0411 and an adjusted R² of 0.0404, explaining approximately 4.11% of the variation in log salary. The scatterplot showed an increasing trend, indicating that players who made hard contact more frequently generally tended to have higher salaries.
+
+Average Exit Velocity was also positively associated with log salary. The coefficient was 0.11831, with a p-value of 2.47 × 10⁻¹² and a 95% confidence interval of [0.08548, 0.15114]. The model had an R² of 0.0351 and an adjusted R² of 0.0344, explaining approximately 3.51% of the variation in log salary. The scatterplot showed an increasing relationship, providing visual support for the positive association between exit velocity and salary.
+
+xBA had a positive and statistically significant relationship with salary. Its coefficient was 11.3459, with a p-value of 5.43 × 10⁻¹² and a 95% confidence interval of [8.1457, 14.5460]. However, the model's R² was only 0.0340, with an adjusted R² of 0.0333, meaning xBA explained approximately 3.40% of the variation in log salary. The scatterplot still showed an increasing trend, indicating that players with higher expected batting averages generally tended to have higher salaries.
+
+Barrel Percentage was positively related to log salary as well. The coefficient was 0.04861, with a p-value of 1.41 × 10⁻⁸ and a 95% confidence interval of [0.03190, 0.06532]. Its R² was 0.0231, with an adjusted R² of 0.0224, so Barrel Percentage explained approximately 2.31% of the variation in log salary. Although the relationship was statistically significant and the scatterplot increased, its explanatory power was relatively weak compared with the expected performance measures.
+
+Launch Angle had the weakest relationship with salary among the eight Statcast variables. Its coefficient was 0.02298, with a p-value of 0.00763 and a 95% confidence interval of [0.00611, 0.03985]. The model had an R² of only 0.0052 and an adjusted R² of 0.0044, explaining approximately 0.52% of the variation in log salary. Although the scatterplot showed an increasing relationship, the very low R² indicates that average launch angle by itself provides little information about salary differences.
+
+Overall, xwOBA was clearly the strongest Statcast predictor of salary, explaining approximately 7.38% of the variation in log salary. It was followed by xSLG at 5.79%, xISO at 4.31%, Hard Hit Percentage at 4.11%, xBA at 3.40%, Exit Velocity at 3.51%, Barrel Percentage at 2.31%, and Launch Angle at only 0.52%. Thus, the expected offensive metrics generally provided more explanatory power than the individual contact-quality metrics.
+
+The results also show an important distinction between statistical significance and explanatory power. All eight Statcast variables were statistically significant, and all eight scatterplots showed increasing relationships with salary. However, even the strongest model, xwOBA, explained less than 8% of salary variation. This indicates that while Statcast performance is associated with player compensation, performance alone does not account for most of the differences in MLB salaries.
+
+Compared with the traditional statistics and sabermetric models from the previous sections, the Statcast models—particularly xwOBA and xSLG—provide somewhat stronger individual relationships with salary. However, the relatively low R² values still suggest that other factors are important. This further supports the need to examine service time and contract regimes, including pre-arbitration, arbitration, and free agency, in the next section.
+
+```{r}
+###############################################################
+# Statcast Salary Models
+###############################################################
+
+
+###############################################################
+# Model 1: log(Salary) ~ xwOBA
+###############################################################
+
+xwoba_salary_model <- lm(log_salary ~ xwOBA, data = hitters)
+
+summary(xwoba_salary_model)
+
+# Regression coefficients
+coef(xwoba_salary_model)
+
+# 95% confidence intervals
+confint(xwoba_salary_model)
+
+# Model performance
+xwoba_r2 <- summary(xwoba_salary_model)$r.squared
+xwoba_adj_r2 <- summary(xwoba_salary_model)$adj.r.squared
+xwoba_rse <- summary(xwoba_salary_model)$sigma
+
+# RMSE
+xwoba_salary_rmse <- sqrt(mean(residuals(xwoba_salary_model)^2))
+xwoba_salary_rmse
+
+# MAE
+xwoba_salary_mae <- mean(abs(residuals(xwoba_salary_model)))
+xwoba_salary_mae
+
+
+###############################################################
+# Model 2: log(Salary) ~ xBA
+###############################################################
+
+xba_salary_model <- lm(log_salary ~ xBA, data = hitters)
+
+summary(xba_salary_model)
+coef(xba_salary_model)
+confint(xba_salary_model)
+
+# Model performance
+xba_r2 <- summary(xba_salary_model)$r.squared
+xba_adj_r2 <- summary(xba_salary_model)$adj.r.squared
+xba_rse <- summary(xba_salary_model)$sigma
+
+# RMSE
+xba_salary_rmse <- sqrt(mean(residuals(xba_salary_model)^2))
+xba_salary_rmse
+
+# MAE
+xba_salary_mae <- mean(abs(residuals(xba_salary_model)))
+xba_salary_mae
+
+
+###############################################################
+# Model 3: log(Salary) ~ xSLG
+###############################################################
+
+xslg_salary_model <- lm(log_salary ~ xSLG, data = hitters)
+
+summary(xslg_salary_model)
+coef(xslg_salary_model)
+confint(xslg_salary_model)
+
+# Model performance
+xslg_r2 <- summary(xslg_salary_model)$r.squared
+xslg_adj_r2 <- summary(xslg_salary_model)$adj.r.squared
+xslg_rse <- summary(xslg_salary_model)$sigma
+
+# RMSE
+xslg_salary_rmse <- sqrt(mean(residuals(xslg_salary_model)^2))
+xslg_salary_rmse
+
+# MAE
+xslg_salary_mae <- mean(abs(residuals(xslg_salary_model)))
+xslg_salary_mae
+
+
+###############################################################
+# Model 4: log(Salary) ~ xISO
+###############################################################
+
+xiso_salary_model <- lm(log_salary ~ xISO, data = hitters)
+
+summary(xiso_salary_model)
+coef(xiso_salary_model)
+confint(xiso_salary_model)
+
+# Model performance
+xiso_r2 <- summary(xiso_salary_model)$r.squared
+xiso_adj_r2 <- summary(xiso_salary_model)$adj.r.squared
+xiso_rse <- summary(xiso_salary_model)$sigma
+
+# RMSE
+xiso_salary_rmse <- sqrt(mean(residuals(xiso_salary_model)^2))
+xiso_salary_rmse
+
+# MAE
+xiso_salary_mae <- mean(abs(residuals(xiso_salary_model)))
+xiso_salary_mae
+
+
+###############################################################
+# Model 5: log(Salary) ~ Barrel Percentage
+###############################################################
+
+barrel_salary_model <- lm(log_salary ~ Barrel_Percent, data = hitters)
+
+summary(barrel_salary_model)
+coef(barrel_salary_model)
+confint(barrel_salary_model)
+
+# Model performance
+barrel_r2 <- summary(barrel_salary_model)$r.squared
+barrel_adj_r2 <- summary(barrel_salary_model)$adj.r.squared
+barrel_rse <- summary(barrel_salary_model)$sigma
+
+# RMSE
+barrel_salary_rmse <- sqrt(mean(residuals(barrel_salary_model)^2))
+barrel_salary_rmse
+
+# MAE
+barrel_salary_mae <- mean(abs(residuals(barrel_salary_model)))
+barrel_salary_mae
+
+
+###############################################################
+# Model 6: log(Salary) ~ Hard Hit Percentage
+###############################################################
+
+hardhit_salary_model <- lm(log_salary ~ HardHit_Percent, data = hitters)
+
+summary(hardhit_salary_model)
+coef(hardhit_salary_model)
+confint(hardhit_salary_model)
+
+# Model performance
+hardhit_r2 <- summary(hardhit_salary_model)$r.squared
+hardhit_adj_r2 <- summary(hardhit_salary_model)$adj.r.squared
+hardhit_rse <- summary(hardhit_salary_model)$sigma
+
+# RMSE
+hardhit_salary_rmse <- sqrt(mean(residuals(hardhit_salary_model)^2))
+hardhit_salary_rmse
+
+# MAE
+hardhit_salary_mae <- mean(abs(residuals(hardhit_salary_model)))
+hardhit_salary_mae
+
+
+###############################################################
+# Model 7: log(Salary) ~ Average Exit Velocity
+###############################################################
+
+ev_salary_model <- lm(log_salary ~ EV_Avg, data = hitters)
+
+summary(ev_salary_model)
+coef(ev_salary_model)
+confint(ev_salary_model)
+
+# Model performance
+ev_r2 <- summary(ev_salary_model)$r.squared
+ev_adj_r2 <- summary(ev_salary_model)$adj.r.squared
+ev_rse <- summary(ev_salary_model)$sigma
+
+# RMSE
+ev_salary_rmse <- sqrt(mean(residuals(ev_salary_model)^2))
+ev_salary_rmse
+
+# MAE
+ev_salary_mae <- mean(abs(residuals(ev_salary_model)))
+ev_salary_mae
+
+
+###############################################################
+# Model 8: log(Salary) ~ Average Launch Angle
+###############################################################
+
+la_salary_model <- lm(log_salary ~ LaunchAngle_Avg, data = hitters)
+
+summary(la_salary_model)
+coef(la_salary_model)
+confint(la_salary_model)
+
+# Model performance
+la_r2 <- summary(la_salary_model)$r.squared
+la_adj_r2 <- summary(la_salary_model)$adj.r.squared
+la_rse <- summary(la_salary_model)$sigma
+
+# RMSE
+la_salary_rmse <- sqrt(mean(residuals(la_salary_model)^2))
+la_salary_rmse
+
+# MAE
+la_salary_mae <- mean(abs(residuals(la_salary_model)))
+la_salary_mae
+
+
+###############################################################
+# Compare Statcast Salary Models
+###############################################################
+
+statcast_salary_comparison <- data.frame(
+
+  Model = c(
+    "Log(Salary) ~ xwOBA",
+    "Log(Salary) ~ xBA",
+    "Log(Salary) ~ xSLG",
+    "Log(Salary) ~ xISO",
+    "Log(Salary) ~ Barrel%",
+    "Log(Salary) ~ Hard Hit%",
+    "Log(Salary) ~ Exit Velocity",
+    "Log(Salary) ~ Launch Angle"
+  ),
+
+  R_Squared = c(
+    xwoba_r2,
+    xba_r2,
+    xslg_r2,
+    xiso_r2,
+    barrel_r2,
+    hardhit_r2,
+    ev_r2,
+    la_r2
+  ),
+
+  Adjusted_R_Squared = c(
+    xwoba_adj_r2,
+    xba_adj_r2,
+    xslg_adj_r2,
+    xiso_adj_r2,
+    barrel_adj_r2,
+    hardhit_adj_r2,
+    ev_adj_r2,
+    la_adj_r2
+  ),
+
+  RSE = c(
+    xwoba_rse,
+    xba_rse,
+    xslg_rse,
+    xiso_rse,
+    barrel_rse,
+    hardhit_rse,
+    ev_rse,
+    la_rse
+  ),
+
+  RMSE = c(
+    xwoba_salary_rmse,
+    xba_salary_rmse,
+    xslg_salary_rmse,
+    xiso_salary_rmse,
+    barrel_salary_rmse,
+    hardhit_salary_rmse,
+    ev_salary_rmse,
+    la_salary_rmse
+  ),
+
+  MAE = c(
+    xwoba_salary_mae,
+    xba_salary_mae,
+    xslg_salary_mae,
+    xiso_salary_mae,
+    barrel_salary_mae,
+    hardhit_salary_mae,
+    ev_salary_mae,
+    la_salary_mae
+  )
+)
+
+statcast_salary_comparison
+
+
+###############################################################
+# Identify the Strongest Statcast Model
+###############################################################
+
+strongest_statcast_model <- statcast_salary_comparison[
+  which.max(statcast_salary_comparison$R_Squared),
+]
+
+strongest_statcast_model
+
+
+###############################################################
+# Scatterplots with Regression Lines
+###############################################################
+
+# xwOBA
+plot(hitters$xwOBA, hitters$log_salary,
+     main = "Log Salary vs xwOBA",
+     xlab = "xwOBA",
+     ylab = "Log(Base Salary)")
+abline(xwoba_salary_model, lwd = 2)
+
+
+# xBA
+plot(hitters$xBA, hitters$log_salary,
+     main = "Log Salary vs xBA",
+     xlab = "xBA",
+     ylab = "Log(Base Salary)")
+abline(xba_salary_model, lwd = 2)
+
+
+# xSLG
+plot(hitters$xSLG, hitters$log_salary,
+     main = "Log Salary vs xSLG",
+     xlab = "xSLG",
+     ylab = "Log(Base Salary)")
+abline(xslg_salary_model, lwd = 2)
+
+
+# xISO
+plot(hitters$xISO, hitters$log_salary,
+     main = "Log Salary vs xISO",
+     xlab = "xISO",
+     ylab = "Log(Base Salary)")
+abline(xiso_salary_model, lwd = 2)
+
+
+# Barrel Percentage
+plot(hitters$Barrel_Percent, hitters$log_salary,
+     main = "Log Salary vs Barrel Percentage",
+     xlab = "Barrel Percentage",
+     ylab = "Log(Base Salary)")
+abline(barrel_salary_model, lwd = 2)
+
+
+# Hard Hit Percentage
+plot(hitters$HardHit_Percent, hitters$log_salary,
+     main = "Log Salary vs Hard Hit Percentage",
+     xlab = "Hard Hit Percentage",
+     ylab = "Log(Base Salary)")
+abline(hardhit_salary_model, lwd = 2)
+
+
+# Exit Velocity
+plot(hitters$EV_Avg, hitters$log_salary,
+     main = "Log Salary vs Exit Velocity",
+     xlab = "Average Exit Velocity",
+     ylab = "Log(Base Salary)")
+abline(ev_salary_model, lwd = 2)
+
+
+# Launch Angle
+plot(hitters$LaunchAngle_Avg, hitters$log_salary,
+     main = "Log Salary vs Launch Angle",
+     xlab = "Average Launch Angle",
+     ylab = "Log(Base Salary)")
+abline(la_salary_model, lwd = 2)
+```
+
+## Service Time
+
+The results from this section show that labor-market structure is substantially more important for explaining MLB salary than the individual performance measures examined in the previous sections. All five models are statistically significant, but the contract-regime models provide the strongest explanatory power. This is particularly important for the central question of this project because it suggests that salaries are strongly influenced by where a player is in the MLB labor market, rather than being determined solely by on-field performance.
+
+The first model examined the relationship between service time and log salary. The relationship was strongly positive and statistically significant, with a service-time coefficient of 0.2998 and a p-value below 0.001. This indicates that players with more MLB service time tend to have substantially higher salaries. The model explained 60.43% of the variation in log salary, with an adjusted R² of 60.40%. Its RMSE was 0.8622 and its MAE was 0.7081. The scatterplot also showed a strong upward relationship between service time and salary, providing visual support for the regression results. Overall, service time alone was a much stronger predictor of salary than any of the individual performance variables examined in previous sections.
+
+Age also had a strong positive relationship with salary. The coefficient for Age was 0.2487, with a p-value below 0.001 and a 95% confidence interval from 0.2341 to 0.2634. The model explained 44.59% of the variation in log salary, which was lower than the service-time model. The RMSE was 1.0202 and the MAE was 0.8345. The scatterplot showed a strong increasing relationship between age and salary. While age is clearly associated with higher salaries, the weaker fit compared with service time suggests that service time captures the labor-market progression of players more directly than age alone.
+
+The contract-regime analysis provided the strongest evidence of labor-market effects. The dataset contained 480 Pre-Arbitration players, 430 Arbitration players, and 467 Free Agents, giving reasonably balanced representation across the three groups. The Pre-Arbitration group was used as the reference category. The model explained 75.00% of the variation in log salary, substantially higher than both the service-time and age models. The RMSE was 0.6853, while the MAE was 0.4982, also making this the best-performing model up to this point.
+
+The regression coefficients showed a very large difference between contract regimes. Relative to Pre-Arbitration players, Arbitration players had a log-salary coefficient of 1.9233, while Free Agents had a coefficient of 2.7977. Both effects were statistically significant with p-values below 0.001. The boxplot also showed a clear separation in salary distributions between the three contract regimes, with salaries increasing as players moved from Pre-Arbitration to Arbitration and then to Free Agency. This visual pattern closely matches the regression results and provides strong evidence that salary is heavily associated with a player's position within the MLB labor market.
+
+Adding WAR to the service-time model increased its R² from 60.43% to 62.60%. Both Service Time and WAR remained statistically significant. Service Time had a coefficient of 0.3059, while WAR had a coefficient of 0.1023, with both p-values below 0.001. This indicates that player performance contributes additional information about salary after accounting for service time. However, the improvement in explanatory power was relatively modest, suggesting that service time remains much more important than WAR in this simple labor-market model.
+
+The strongest model was the final model, which included both contract regime and WAR. Its R² increased to 76.18%, with an adjusted R² of 76.13%. It also produced the lowest RMSE (0.6689) and MAE (0.4880) among the five models. WAR remained statistically significant with a coefficient of 0.0754, meaning that better-performing players tend to have higher salaries even after accounting for contract regime. At the same time, the contract-regime effects remained extremely large. Relative to Pre-Arbitration players, Arbitration players had a coefficient of 1.9093, while Free Agents had a coefficient of 2.8230. Both effects remained highly significant.
+
+Overall, the results provide strong evidence that labor-market structure is a major determinant of MLB salaries. Service time alone explained substantially more salary variation than any of the individual traditional, sabermetric, or Statcast measures examined earlier. Contract regime was even stronger, explaining 75.00% of salary variation by itself, and adding WAR increased this to 76.18%. The relatively small improvement from adding WAR demonstrates that while performance matters, a player's position within the MLB compensation system appears to be a much stronger factor in determining salary.
+
+This is an important result for the central research question, “Does Major League Baseball pay players based on performance or labor market structure?” The findings from this section suggest that the answer is both, but labor-market structure appears to play the larger role. Players' salaries rise substantially as they progress from Pre-Arbitration to Arbitration and Free Agency, while performance adds additional but comparatively smaller explanatory power. The next section on Financial Tier can build on this by examining whether the economic characteristics of a player's team or market provide another important explanation for salary differences.
+
+```{r}
+############################################################
+# Service Time, Age, and Contract Regime
+############################################################
+
+
+############################################################
+# Model 1: log(Salary) ~ Service Time
+############################################################
+
+service_model <- lm(
+  log_salary ~ Service_Time,
+  data = hitters
+)
+
+summary(service_model)
+
+# Display 95% confidence intervals
+confint(service_model)
+
+summary(service_model)$r.squared
+summary(service_model)$adj.r.squared
+
+# Calculate RMSE
+service_rmse <- sqrt(
+  mean(residuals(service_model)^2)
+)
+
+service_rmse
+
+# Calculate MAE
+service_mae <- mean(
+  abs(residuals(service_model))
+)
+
+service_mae
+
+
+plot(
+  hitters$Service_Time,
+  hitters$log_salary,
+  main = "Log(Salary) vs Service Time",
+  xlab = "Service Time",
+  ylab = "Log(Base Salary)",
+  pch = 19
+)
+
+abline(
+  service_model,
+  col = "red",
+  lwd = 2
+)
+
+
+############################################################
+# Model 2: log(Salary) ~ Age
+############################################################
+
+age_model <- lm(
+  log_salary ~ Age,
+  data = hitters
+)
+
+summary(age_model)
+
+# Display 95% confidence intervals
+confint(age_model)
+
+summary(age_model)$r.squared
+summary(age_model)$adj.r.squared
+
+# Calculate RMSE
+age_rmse <- sqrt(
+  mean(residuals(age_model)^2)
+)
+
+age_rmse
+
+# Calculate MAE
+age_mae <- mean(
+  abs(residuals(age_model))
+)
+
+age_mae
+
+
+plot(
+  hitters$Age,
+  hitters$log_salary,
+  main = "Log(Salary) vs Age",
+  xlab = "Age",
+  ylab = "Log(Base Salary)",
+  pch = 19
+)
+
+abline(
+  age_model,
+  col = "blue",
+  lwd = 2
+)
+
+
+############################################################
+# Create Contract Regime Variable
+############################################################
+
+# Classify players based on service time
+# Less than 3 years = Pre-Arbitration
+# 3 to less than 6 years = Arbitration
+# 6 or more years = Free Agency
+
+hitters$Contract_Regime <- ifelse(
+  hitters$Service_Time < 3,
+  "Pre-Arbitration",
+  ifelse(
+    hitters$Service_Time < 6,
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+# Pre-Arbitration is used as the reference group
+
+hitters$Contract_Regime <- factor(
+  hitters$Contract_Regime,
+  levels = c(
+    "Pre-Arbitration",
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+table(hitters$Contract_Regime)
+
+
+############################################################
+# Model 3: log(Salary) ~ Contract Regime
+############################################################
+
+contract_model <- lm(
+  log_salary ~ Contract_Regime,
+  data = hitters
+)
+
+summary(contract_model)
+
+# Display 95% confidence intervals
+confint(contract_model)
+
+summary(contract_model)$r.squared
+summary(contract_model)$adj.r.squared
+
+# Calculate RMSE
+contract_rmse <- sqrt(
+  mean(residuals(contract_model)^2)
+)
+
+contract_rmse
+
+# Calculate MAE
+contract_mae <- mean(
+  abs(residuals(contract_model))
+)
+
+contract_mae
+
+
+boxplot(
+  log_salary ~ Contract_Regime,
+  data = hitters,
+  main = "Log(Salary) by Contract Regime",
+  xlab = "Contract Regime",
+  ylab = "Log(Base Salary)"
+)
+
+
+############################################################
+# Model 4: log(Salary) ~ Service Time + WAR
+############################################################
+
+service_fwar_model <- lm(
+  log_salary ~ Service_Time + WAR,
+  data = hitters
+)
+
+summary(service_fwar_model)
+
+# Display 95% confidence intervals
+confint(service_fwar_model)
+
+summary(service_fwar_model)$r.squared
+summary(service_fwar_model)$adj.r.squared
+
+# Calculate RMSE
+service_fwar_rmse <- sqrt(
+  mean(residuals(service_fwar_model)^2)
+)
+
+service_fwar_rmse
+
+# Calculate MAE
+service_fwar_mae <- mean(
+  abs(residuals(service_fwar_model))
+)
+
+service_fwar_mae
+
+
+############################################################
+# Model 5: log(Salary) ~ Contract Regime + WAR
+############################################################
+
+contract_war_model <- lm(
+  log_salary ~ Contract_Regime + WAR,
+  data = hitters
+)
+
+summary(contract_war_model)
+
+# Display 95% confidence intervals
+confint(contract_war_model)
+
+summary(contract_war_model)$r.squared
+summary(contract_war_model)$adj.r.squared
+
+# Calculate RMSE
+contract_war_rmse <- sqrt(
+  mean(residuals(contract_war_model)^2)
+)
+
+contract_war_rmse
+
+# Calculate MAE
+contract_war_mae <- mean(
+  abs(residuals(contract_war_model))
+)
+
+contract_war_mae
+
+
+############################################################
+# Compare the Five Models
+############################################################
+
+service_results <- data.frame(
+
+  Model = c(
+    "Log(Salary) ~ Service Time",
+    "Log(Salary) ~ Age",
+    "Log(Salary) ~ Contract Regime",
+    "Log(Salary) ~ Service Time + WAR",
+    "Log(Salary) ~ Contract Regime + WAR"
+  ),
+
+  R_Squared = c(
+    summary(service_model)$r.squared,
+    summary(age_model)$r.squared,
+    summary(contract_model)$r.squared,
+    summary(service_fwar_model)$r.squared,
+    summary(contract_war_model)$r.squared
+  ),
+
+  Adjusted_R_Squared = c(
+    summary(service_model)$adj.r.squared,
+    summary(age_model)$adj.r.squared,
+    summary(contract_model)$adj.r.squared,
+    summary(service_fwar_model)$adj.r.squared,
+    summary(contract_war_model)$adj.r.squared
+  ),
+
+  RMSE = c(
+    service_rmse,
+    age_rmse,
+    contract_rmse,
+    service_fwar_rmse,
+    contract_war_rmse
+  ),
+
+  MAE = c(
+    service_mae,
+    age_mae,
+    contract_mae,
+    service_fwar_mae,
+    contract_war_mae
+  )
+)
+
+service_results
+```
+
+## Financial Tier
+
+The results from this section shows that financial tier has a statistically significant relationship with MLB salary, but its effect is much smaller than the effect of contract regime. This distinction is important because it suggests that differences in team financial resources may influence player salaries, but the player's position within the MLB labor market appears to be substantially more important.
+
+The dataset contained 480 players from Big Market teams, 473 from Mid Market teams, and 424 from Small Market teams. This provides relatively balanced representation across the three financial tiers, allowing for meaningful comparisons between the groups.
+
+The first model examined salary using Financial Tier alone. Big Market teams were used as the reference category. Both Mid Market and Small Market players had significantly lower log salaries than players on Big Market teams. The coefficient for Mid Market teams was -0.4015, while the coefficient for Small Market teams was -0.5077, with both p-values below 0.001. The 95% confidence intervals also remained entirely below zero, indicating a statistically significant difference from the Big Market group. However, the model explained only 2.56% of the variation in log salary, with an adjusted R² of 2.42%. The RMSE was 1.3529 and the MAE was 1.1885. Therefore, although financial tier is statistically significant, it has relatively limited explanatory power when considered by itself.
+
+Adding WAR to the Financial Tier model produced only a small improvement. The R² increased from 2.56% to 2.75%, while the adjusted R² increased from 2.42% to 2.54%. Interestingly, WAR was not statistically significant in this model, with a coefficient of 0.0301 and a p-value of 0.105. Meanwhile, both financial-tier coefficients remained statistically significant. This suggests that when financial tier is considered by itself, adding WAR does not provide much additional explanation for salary differences. The RMSE decreased slightly to 1.3516, while the MAE decreased only slightly to 1.1882, further demonstrating that the addition of WAR produced very little improvement.
+
+The results changed substantially when Contract Regime was added. The model containing Financial Tier and Contract Regime produced an R² of 75.69% and an adjusted R² of 75.61%, compared with only 2.56% for Financial Tier alone. Both Mid Market and Small Market teams continued to have significantly lower salaries than Big Market teams, although their effects became smaller after accounting for contract regime. The Mid Market coefficient was -0.1502, while the Small Market coefficient was -0.2805. Both remained statistically significant. At the same time, the contract-regime coefficients remained very large: Arbitration players had a coefficient of 1.9192, while Free Agents had a coefficient of 2.7725, relative to Pre-Arbitration players. Both were highly statistically significant.
+
+This demonstrates that much of the salary variation associated with financial tier is connected to the broader labor-market structure of MLB. Once Contract Regime is included, the financial-tier effects become substantially smaller, while Contract Regime explains a very large portion of salary differences. The model also had a much lower RMSE of 0.6758 and MAE of 0.4915 compared with the models using Financial Tier alone.
+
+The final model included Financial Tier, Contract Regime, and WAR. This was the strongest model in this section, with an R² of 76.65% and an adjusted R² of 76.57%. Its RMSE was 0.6623, while its MAE was 0.4828, making it an improvement over the Financial Tier + Contract Regime model. All of the major predictors were statistically significant in this model. WAR had a positive coefficient of 0.0691 with a p-value below 0.001, showing that performance was associated with higher salary after accounting for both financial tier and contract regime.
+
+Financial Tier also remained statistically significant. Relative to Big Market teams, Mid Market players had a coefficient of -0.1135, while Small Market players had a coefficient of -0.2365. This means that even after accounting for contract regime and WAR, players on Mid and Small Market teams tended to have lower salaries than players on Big Market teams. However, the smaller coefficients compared with the Financial Tier-only model indicate that part of the original financial-tier difference was explained by differences in contract regime and player performance.
+
+Overall, the results show that Financial Tier does have a statistically significant relationship with MLB salary, but its importance is much smaller than Contract Regime. Financial Tier alone explained only 2.56% of salary variation, compared with 75.00% for Contract Regime in the section before. When Financial Tier, Contract Regime, and WAR were combined, the model explained 76.65% of salary variation. This indicates that team financial structure provides some additional information about salaries, but the player's position within the MLB labor market remains the dominant factor.
+
+These findings strengthen the overall argument of the project. Salary appears to be influenced by performance, labor-market position, and team financial structure, but these factors do not contribute equally. Contract Regime is the strongest of the factors examined so far, while Financial Tier provides a smaller but still statistically significant additional effect. The final model also shows that WAR becomes significant once the labor-market structure is properly accounted for, suggesting that performance does matter, but its relationship with salary is heavily influenced by the economic and contractual environment in which players are compensated.
+
+This makes Financial Tier a useful addition to the project because it shows that MLB salaries are not determined solely by individual player performance. Team-level financial resources and market structure also appear to play a role, although the results indicate that labor-market structure is the much stronger source of salary variation.
+
+```{r}
+############################################################
+# Financial Tier and Salary
+############################################################
+
+table(hitters$financial_tier)
+
+############################################################
+# Model 1: log(Salary) ~ Financial Tier
+############################################################
+
+financial_tier_model <- lm(
+  log_salary ~ financial_tier,
+  data = hitters
+)
+
+summary(financial_tier_model)
+
+# Display 95% confidence intervals
+confint(financial_tier_model)
+
+summary(financial_tier_model)$r.squared
+summary(financial_tier_model)$adj.r.squared
+
+# Calculate RMSE
+financial_tier_rmse <- sqrt(
+  mean(residuals(financial_tier_model)^2)
+)
+
+financial_tier_rmse
+
+# Calculate MAE
+financial_tier_mae <- mean(
+  abs(residuals(financial_tier_model))
+)
+
+financial_tier_mae
+
+boxplot(
+  log_salary ~ financial_tier,
+  data = hitters,
+  main = "Log(Salary) by Financial Tier",
+  xlab = "Financial Tier",
+  ylab = "Log(Base Salary)"
+)
+
+
+############################################################
+# Model 2: log(Salary) ~ Financial Tier + WAR
+############################################################
+
+financial_tier_war_model <- lm(
+  log_salary ~ financial_tier + WAR,
+  data = hitters
+)
+
+summary(financial_tier_war_model)
+
+# Display 95% confidence intervals
+confint(financial_tier_war_model)
+
+summary(financial_tier_war_model)$r.squared
+summary(financial_tier_war_model)$adj.r.squared
+
+# Calculate RMSE
+financial_tier_war_rmse <- sqrt(
+  mean(residuals(financial_tier_war_model)^2)
+)
+
+financial_tier_war_rmse
+
+# Calculate MAE
+financial_tier_war_mae <- mean(
+  abs(residuals(financial_tier_war_model))
+)
+
+financial_tier_war_mae
+
+
+############################################################
+# Model 3: log(Salary) ~ Financial Tier + Contract Regime
+############################################################
+
+
+financial_contract_model <- lm(
+  log_salary ~ financial_tier + Contract_Regime,
+  data = hitters
+)
+
+summary(financial_contract_model)
+
+# Display 95% confidence intervals
+confint(financial_contract_model)
+
+summary(financial_contract_model)$r.squared
+summary(financial_contract_model)$adj.r.squared
+
+# Calculate RMSE
+financial_contract_rmse <- sqrt(
+  mean(residuals(financial_contract_model)^2)
+)
+
+financial_contract_rmse
+
+# Calculate MAE
+financial_contract_mae <- mean(
+  abs(residuals(financial_contract_model))
+)
+
+financial_contract_mae
+
+
+############################################################
+# Model 4: log(Salary) ~ Financial Tier + Contract Regime + WAR
+############################################################
+
+financial_full_model <- lm(
+  log_salary ~ financial_tier + Contract_Regime + WAR,
+  data = hitters
+)
+
+summary(financial_full_model)
+
+# Display 95% confidence intervals
+confint(financial_full_model)
+
+summary(financial_full_model)$r.squared
+summary(financial_full_model)$adj.r.squared
+
+# Calculate RMSE
+financial_full_rmse <- sqrt(
+  mean(residuals(financial_full_model)^2)
+)
+
+financial_full_rmse
+
+# Calculate MAE
+financial_full_mae <- mean(
+  abs(residuals(financial_full_model))
+)
+
+financial_full_mae
+
+
+############################################################
+# Compare the Financial Tier Models
+############################################################
+
+financial_tier_results <- data.frame(
+
+  Model = c(
+    "Log(Salary) ~ Financial Tier",
+    "Log(Salary) ~ Financial Tier + WAR",
+    "Log(Salary) ~ Financial Tier + Contract Regime",
+    "Log(Salary) ~ Financial Tier + Contract Regime + WAR"
+  ),
+
+  R_Squared = c(
+    summary(financial_tier_model)$r.squared,
+    summary(financial_tier_war_model)$r.squared,
+    summary(financial_contract_model)$r.squared,
+    summary(financial_full_model)$r.squared
+  ),
+
+  Adjusted_R_Squared = c(
+    summary(financial_tier_model)$adj.r.squared,
+    summary(financial_tier_war_model)$adj.r.squared,
+    summary(financial_contract_model)$adj.r.squared,
+    summary(financial_full_model)$adj.r.squared
+  ),
+
+  RMSE = c(
+    financial_tier_rmse,
+    financial_tier_war_rmse,
+    financial_contract_rmse,
+    financial_full_rmse
+  ),
+
+  MAE = c(
+    financial_tier_mae,
+    financial_tier_war_mae,
+    financial_contract_mae,
+    financial_full_mae
+  )
+)
+
+# View model comparison
+financial_tier_results
+```
+
+## Diagnostics
+
+Diagnostic plots were used to evaluate the major salary models from the simple salary model sections, focusing on the residual patterns, approximate normality of the residuals, constant variance, and the presence of potentially influential observations. Because salary data can contain unusually high-paid players, these diagnostics are especially important for determining whether the relationships identified in the simple regressions are being driven by a small number of observations.
+
+Salary vs. xwOBA
+
+The diagnostic plots for the xwOBA model show several issues with the regression assumptions. The residuals-versus-fitted plot shows a noticeable pattern rather than a completely random cloud around zero. The spread of the residuals also changes somewhat across the fitted values, suggesting that the constant-variance assumption may not be fully satisfied. The Scale-Location plot supports this conclusion because the red trend line is not completely horizontal and the spread of the points varies across the fitted values.
+
+The Q-Q plot shows substantial departures from the reference line, particularly in both tails. This indicates that the residuals are not perfectly normally distributed and that there are some observations with unusually large residuals. The Residuals-versus-Leverage plot also identifies several observations with relatively higher leverage, although most observations remain concentrated at low leverage. Overall, the xwOBA model has some influential and unusual observations, but the diagnostic plots do not suggest that the model is completely dominated by a single observation.
+
+Salary vs. Service Time
+
+The Service Time model shows a stronger pattern of nonconstant variance than the xwOBA model. The residuals-versus-fitted plot shows that the residual spread changes as fitted salary increases, with larger negative residuals appearing among players with higher fitted values. The Scale-Location plot shows a clear upward trend at higher fitted values, providing visual evidence that the variance of the residuals increases as predicted salary increases.
+
+The Q-Q plot also departs from the reference line, particularly in the lower tail. Several observations have standardized residuals that are considerably below the majority of the data. The Residuals-versus-Leverage plot identifies a few observations with relatively high leverage, including observations near the highest fitted salary values. These observations should be considered when interpreting the Service Time model because unusually high-paid players can have a relatively large effect on the estimated relationship.
+
+Overall, the Service Time model has a strong relationship with salary, but its diagnostic plots suggest that the variability in salary is not constant across different levels of service time. This is reasonable for MLB salary data because salaries tend to become much more dispersed as players gain service time and move into more valuable stages of the labor market.
+
+Contract Regime + WAR
+
+The Contract Regime + WAR model shows a different residual structure because Contract Regime is a categorical variable. The residuals-versus-fitted plot contains distinct groups of observations corresponding to the different contract regimes. Within those groups, the residuals are generally centered around zero, although there are some observations with relatively large negative residuals.
+
+The Q-Q plot shows noticeable departures from the reference line, especially in the tails. This indicates that some players have salaries that are substantially different from what the model predicts. The Scale-Location plot also shows differences in residual spread across the fitted values and contract-regime groups, suggesting that the constant-variance assumption is not completely satisfied.
+
+The Residuals-versus-Leverage plot shows that most observations have relatively low leverage, although a small number of observations have higher leverage. Observation 1294, for example, appears repeatedly among the more unusual observations, while other observations such as 1103 and 1199 also stand out in the diagnostic plots. However, there is not evidence from the plot alone that one observation completely determines the regression relationship.
+
+Despite these diagnostic issues, the Contract Regime + WAR model has a more useful structure for explaining salary because it accounts for the large differences between pre-arbitration, arbitration, and free-agency players while still allowing performance to contribute to salary.
+
+Salary vs. WAR
+
+The WAR model also shows departures from the standard regression assumptions. The residuals-versus-fitted plot shows a relatively concentrated cloud, but there is some curvature in the red trend line and the spread of the residuals changes across the fitted values. The Scale-Location plot similarly shows some variation in residual spread rather than a perfectly constant pattern.
+
+The Q-Q plot shows substantial departures from the reference line, particularly because of the bounded and uneven distribution of WAR-related residuals. There are several observations in the tails that differ considerably from the rest of the data. The Residuals-versus-Leverage plot identifies several observations with higher leverage, including observations such as 1157, 1248, and 1119. These observations may have a greater influence on the estimated WAR-salary relationship than typical observations.
+
+Therefore, while WAR has a statistically significant positive relationship with salary, the diagnostic plots reinforce the conclusion from Section 5.2 that WAR by itself does not capture the full salary structure.
+
+Salary vs. RBI
+
+The RBI model shows a relatively similar pattern to the other performance-based models. The residuals-versus-fitted plot does not form a perfectly random horizontal band, and there is some structure in the residuals as fitted salary increases. The Scale-Location plot is somewhat more stable than the Service Time model, although there is still variation in the spread of the residuals across fitted values.
+
+The Q-Q plot shows departures from normality in both tails, with several observations falling away from the reference line. The Residuals-versus-Leverage plot shows that most observations have low leverage, while a smaller number of observations have somewhat greater leverage. These observations do not appear to completely dominate the model, but they demonstrate that some players have salary outcomes that are unusual relative to their RBI totals.
+
+The diagnostics therefore suggest that the RBI model provides a useful description of the positive relationship between offensive production and salary, but RBI alone does not adequately account for the substantial variation in MLB salaries.
+
+Salary vs. wRC+
+
+The wRC+ model has diagnostic patterns similar to the other individual performance models. The residuals-versus-fitted plot shows some structure around the fitted values rather than a perfectly random pattern. The Scale-Location plot also shows some changes in residual spread, indicating that the variance is not completely constant across the range of predicted salaries.
+
+The Q-Q plot shows noticeable deviations from the reference line in both tails, indicating that the residuals are not perfectly normally distributed. Several observations have relatively large standardized residuals. The Residuals-versus-Leverage plot shows that most observations have low leverage, although a few observations have higher leverage and may have a greater influence on the fitted regression line.
+
+Overall, the wRC+ model does not show any major diagnostic feature that makes the model unusable, but its residual patterns demonstrate that a single performance statistic cannot fully capture the complexity of MLB salaries.
+
+Overall Diagnostic Findings
+
+Across the six main salary models, the diagnostic plots show a consistent pattern: the simple salary relationships do not perfectly satisfy the standard linear regression assumptions. The Q-Q plots for all six models show noticeable departures from the reference line, particularly in the tails, indicating the presence of unusually large residuals and non-normal residual distributions.
+
+The Residuals-versus-Fitted and Scale-Location plots also suggest that constant variance is not fully satisfied, with the Service Time model showing one of the clearest changes in residual spread at higher fitted salaries. This is an important finding because salary distributions become increasingly dispersed as players move through their careers.
+
+There are also several observations with relatively high leverage or unusually large residuals. However, the diagnostic plots do not indicate that the results are entirely driven by one single player or observation. Instead, the unusual observations appear to reflect the natural extremes of MLB salaries, where a relatively small number of players receive salaries that are substantially different from those of the rest of the sample.
+
+Most importantly, the diagnostics provide another reason to move beyond the simple models in Section 5. The residual patterns suggest that salary is influenced by several factors simultaneously rather than by one performance statistic alone. This supports the transition to the multiple salary models in the next sections, where performance measures can be considered alongside service time, contract regime, age, and other labor-market variables.
+
+```{r}
+############################################################
+# Diagnostic Analysis
+###########################################################
+
+
+############################################################
+# Fit the Main Salary Models
+############################################################
+
+# Model 1: Salary and WAR
+model_log_salary_war <- lm(
+  log_salary ~ WAR,
+  data = hitters
+)
+
+# Model 2: Salary and RBI
+model_log_salary_rbi <- lm(
+  log_salary ~ RBI,
+  data = hitters
+)
+
+# Model 3: Salary and wRC+
+model_log_salary_wrc <- lm(
+  log_salary ~ wRC_plus,
+  data = hitters
+)
+
+# Model 4: Salary and xwOBA
+model_log_salary_xwoba <- lm(
+  log_salary ~ xwOBA,
+  data = hitters
+)
+
+# Model 5: Salary and Service Time
+model_log_salary_service <- lm(
+  log_salary ~ Service_Time,
+  data = hitters
+)
+
+# Model 6: Salary, Contract Regime, and WAR
+model_log_salary_contract_war <- lm(
+  log_salary ~ Contract_Regime + WAR,
+  data = hitters
+)
+
+
+############################################################
+# Diagnostic Plots: log(Salary) ~ WAR
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_war,
+  main = "Diagnostics: log(Salary) ~ WAR"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Diagnostic Plots: log(Salary) ~ RBI
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_rbi,
+  main = "Diagnostics: log(Salary) ~ RBI"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Diagnostic Plots: log(Salary) ~ wRC+
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_wrc,
+  main = "Diagnostics: log(Salary) ~ wRC+"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Diagnostic Plots: log(Salary) ~ xwOBA
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_xwoba,
+  main = "Diagnostics: log(Salary) ~ xwOBA"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Diagnostic Plots: log(Salary) ~ Service Time
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_service,
+  main = "Diagnostics: log(Salary) ~ Service Time"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Diagnostic Plots:
+# log(Salary) ~ Contract Regime + WAR
+############################################################
+
+par(mfrow = c(2, 2))
+
+plot(
+  model_log_salary_contract_war,
+  main = "Diagnostics: Contract Regime + WAR"
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Residual Histograms
+############################################################
+
+# Model 1: WAR
+hist(
+  residuals(model_log_salary_war),
+  main = "Residual Distribution: log(Salary) ~ WAR",
+  xlab = "Residuals"
+)
+
+# Model 2: RBI
+hist(
+  residuals(model_log_salary_rbi),
+  main = "Residual Distribution: log(Salary) ~ RBI",
+  xlab = "Residuals"
+)
+
+# Model 3: wRC+
+hist(
+  residuals(model_log_salary_wrc),
+  main = "Residual Distribution: log(Salary) ~ wRC+",
+  xlab = "Residuals"
+)
+
+# Model 4: xwOBA
+hist(
+  residuals(model_log_salary_xwoba),
+  main = "Residual Distribution: log(Salary) ~ xwOBA",
+  xlab = "Residuals"
+)
+
+# Model 5: Service Time
+hist(
+  residuals(model_log_salary_service),
+  main = "Residual Distribution: log(Salary) ~ Service Time",
+  xlab = "Residuals"
+)
+
+# Model 6: Contract Regime + WAR
+hist(
+  residuals(model_log_salary_contract_war),
+  main = "Residual Distribution: Contract Regime + WAR",
+  xlab = "Residuals"
+)
+
+
+############################################################
+# Residual vs Fitted Plots
+############################################################
+
+# Model 1: WAR
+plot(
+  fitted(model_log_salary_war),
+  residuals(model_log_salary_war),
+  main = "Residuals vs Fitted: log(Salary) ~ WAR",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+# Model 2: RBI
+plot(
+  fitted(model_log_salary_rbi),
+  residuals(model_log_salary_rbi),
+  main = "Residuals vs Fitted: log(Salary) ~ RBI",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+# Model 3: wRC+
+plot(
+  fitted(model_log_salary_wrc),
+  residuals(model_log_salary_wrc),
+  main = "Residuals vs Fitted: log(Salary) ~ wRC+",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+# Model 4: xwOBA
+plot(
+  fitted(model_log_salary_xwoba),
+  residuals(model_log_salary_xwoba),
+  main = "Residuals vs Fitted: log(Salary) ~ xwOBA",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+# Model 5: Service Time
+plot(
+  fitted(model_log_salary_service),
+  residuals(model_log_salary_service),
+  main = "Residuals vs Fitted: log(Salary) ~ Service Time",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+# Model 6: Contract Regime + WAR
+plot(
+  fitted(model_log_salary_contract_war),
+  residuals(model_log_salary_contract_war),
+  main = "Residuals vs Fitted: Contract Regime + WAR",
+  xlab = "Fitted Values",
+  ylab = "Residuals",
+  pch = 19
+)
+
+abline(h = 0, lty = 2)
+
+
+
+############################################################
+# Normal Q-Q Plots
+############################################################
+
+# Model 1: WAR
+qqnorm(
+  residuals(model_log_salary_war),
+  main = "Normal Q-Q Plot: log(Salary) ~ WAR"
+)
+
+qqline(
+  residuals(model_log_salary_war)
+)
+
+
+# Model 2: RBI
+qqnorm(
+  residuals(model_log_salary_rbi),
+  main = "Normal Q-Q Plot: log(Salary) ~ RBI"
+)
+
+qqline(
+  residuals(model_log_salary_rbi)
+)
+
+
+# Model 3: wRC+
+qqnorm(
+  residuals(model_log_salary_wrc),
+  main = "Normal Q-Q Plot: log(Salary) ~ wRC+"
+)
+
+qqline(
+  residuals(model_log_salary_wrc)
+)
+
+
+# Model 4: xwOBA
+qqnorm(
+  residuals(model_log_salary_xwoba),
+  main = "Normal Q-Q Plot: log(Salary) ~ xwOBA"
+)
+
+qqline(
+  residuals(model_log_salary_xwoba)
+)
+
+
+# Model 5: Service Time
+qqnorm(
+  residuals(model_log_salary_service),
+  main = "Normal Q-Q Plot: log(Salary) ~ Service Time"
+)
+
+qqline(
+  residuals(model_log_salary_service)
+)
+
+
+# Model 6: Contract Regime + WAR
+qqnorm(
+  residuals(model_log_salary_contract_war),
+  main = "Normal Q-Q Plot: Contract Regime + WAR"
+)
+
+qqline(
+  residuals(model_log_salary_contract_war)
+)
+
+
+
+############################################################
+# Cook's Distance
+############################################################
+
+# Model 1: WAR
+plot(
+  cooks.distance(model_log_salary_war),
+  type = "h",
+  main = "Cook's Distance: log(Salary) ~ WAR",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+
+# Model 2: RBI
+plot(
+  cooks.distance(model_log_salary_rbi),
+  type = "h",
+  main = "Cook's Distance: log(Salary) ~ RBI",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+
+# Model 3: wRC+
+plot(
+  cooks.distance(model_log_salary_wrc),
+  type = "h",
+  main = "Cook's Distance: log(Salary) ~ wRC+",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+
+# Model 4: xwOBA
+plot(
+  cooks.distance(model_log_salary_xwoba),
+  type = "h",
+  main = "Cook's Distance: log(Salary) ~ xwOBA",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+
+# Model 5: Service Time
+plot(
+  cooks.distance(model_log_salary_service),
+  type = "h",
+  main = "Cook's Distance: log(Salary) ~ Service Time",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+
+# Model 6: Contract Regime + WAR
+plot(
+  cooks.distance(model_log_salary_contract_war),
+  type = "h",
+  main = "Cook's Distance: Contract Regime + WAR",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+abline(
+  h = 4 / nrow(hitters),
+  lty = 2
+)
+
+############################################################
+# Leverage Values
+############################################################
+
+# Model 1: WAR
+plot(
+  hatvalues(model_log_salary_war),
+  type = "h",
+  main = "Leverage Values: log(Salary) ~ WAR",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+# Model 2: RBI
+plot(
+  hatvalues(model_log_salary_rbi),
+  type = "h",
+  main = "Leverage Values: log(Salary) ~ RBI",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+# Model 3: wRC+
+plot(
+  hatvalues(model_log_salary_wrc),
+  type = "h",
+  main = "Leverage Values: log(Salary) ~ wRC+",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+# Model 4: xwOBA
+plot(
+  hatvalues(model_log_salary_xwoba),
+  type = "h",
+  main = "Leverage Values: log(Salary) ~ xwOBA",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+# Model 5: Service Time
+plot(
+  hatvalues(model_log_salary_service),
+  type = "h",
+  main = "Leverage Values: log(Salary) ~ Service Time",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+# Model 6: Contract Regime + WAR
+plot(
+  hatvalues(model_log_salary_contract_war),
+  type = "h",
+  main = "Leverage Values: Contract Regime + WAR",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+
+############################################################
+# Largest Cook's Distance Values
+############################################################
+
+# Model 1: WAR
+head(
+  sort(
+    cooks.distance(model_log_salary_war),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 2: RBI
+head(
+  sort(
+    cooks.distance(model_log_salary_rbi),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 3: wRC+
+head(
+  sort(
+    cooks.distance(model_log_salary_wrc),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 4: xwOBA
+head(
+  sort(
+    cooks.distance(model_log_salary_xwoba),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 5: Service Time
+head(
+  sort(
+    cooks.distance(model_log_salary_service),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 6: Contract Regime + WAR
+head(
+  sort(
+    cooks.distance(model_log_salary_contract_war),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+
+############################################################
+# Largest Leverage Values
+############################################################
+
+# Model 1: WAR
+head(
+  sort(
+    hatvalues(model_log_salary_war),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 2: RBI
+head(
+  sort(
+    hatvalues(model_log_salary_rbi),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 3: wRC+
+head(
+  sort(
+    hatvalues(model_log_salary_wrc),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 4: xwOBA
+head(
+  sort(
+    hatvalues(model_log_salary_xwoba),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 5: Service Time
+head(
+  sort(
+    hatvalues(model_log_salary_service),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 6: Contract Regime + WAR
+head(
+  sort(
+    hatvalues(model_log_salary_contract_war),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+
+############################################################
+# Largest Standardized Residuals
+############################################################
+
+# Model 1: WAR
+head(
+  sort(
+    abs(rstandard(model_log_salary_war)),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 2: RBI
+head(
+  sort(
+    abs(rstandard(model_log_salary_rbi)),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 3: wRC+
+head(
+  sort(
+    abs(rstandard(model_log_salary_wrc)),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 4: xwOBA
+head(
+  sort(
+    abs(rstandard(model_log_salary_xwoba)),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 5: Service Time
+head(
+  sort(
+    abs(rstandard(model_log_salary_service)),
+    decreasing = TRUE
+  ),
+  10
+)
+
+
+# Model 6: Contract Regime + WAR
+head(
+  sort(
+    abs(rstandard(model_log_salary_contract_war)),
+    decreasing = TRUE
+  ),
+  10
+)
+```
+
+## Simple Model Comparison
+
+The simple salary models show that MLB salaries are influenced by both player performance and labor-market factors, but the strength of these relationships varies considerably. The individual performance measures examined in the traditional, sabermetrics and statcast sections were generally statistically significant, but their explanatory power was relatively limited. WAR explained only 1.95% of the variation in raw salary and 0.40% of the variation in log salary. Among the traditional statistics, RBI provided the strongest individual relationship with log salary, explaining 4.24% of the variation, while HR, OPS, R, SB, and BA explained even smaller amounts. The sabermetric measures produced similar results, with BsR having the strongest individual fit at 3.77% and wRC+ explaining 3.32%. Statcast measures performed somewhat better, particularly xwOBA, which explained 7.38% of the variation in log salary, followed by xSLG at 5.79%. However, even the strongest performance-based model left the large majority of salary variation unexplained.
+
+The results changed substantially when labor-market variables were considered. Service Time alone explained 60.43% of the variation in log salary, while Age explained 44.59%. Most importantly, Contract Regime explained 75.00% of the variation by itself. The Contract Regime + WAR model increased the R² to 76.18%, with both Contract Regime and WAR remaining statistically significant. This indicates that player performance does contribute to salary, but a player's position within the MLB labor market appears to be much more important than any single performance statistic. The Financial Tier analysis supported this conclusion but showed that team market size had a much smaller relationship with salary. Financial Tier alone explained only 2.56% of the variation, while adding Contract Regime increased the R² to 75.69%. Adding WAR as well produced an R² of 76.65%, showing that performance still contributes after accounting for labor-market structure.
+
+The diagnostic analysis also showed that the simple salary models do not perfectly satisfy the assumptions of ordinary linear regression. The Q-Q plots showed noticeable departures from the reference line, particularly in the tails, indicating unusually large residuals and non-normality. The Residuals-versus-Fitted and Scale-Location plots also showed changes in the spread of residuals across fitted salary levels, providing evidence that the variance is not completely constant. Several observations also had relatively high leverage or unusually large residuals. These patterns are not unexpected in MLB salary data because salaries are highly dispersed, particularly among players with greater service time and more advanced contract status. The diagnostics therefore suggest that salary relationships should be interpreted cautiously and that individual observations can have more influence than typical players.
+
+Overall, this section provides strong evidence that MLB salaries are not determined by player performance alone. Performance measures such as WAR, RBI, wRC+, and xwOBA are statistically related to salary, but their individual explanatory power is relatively weak. In contrast, Service Time and especially Contract Regime explain a much larger share of salary variation. This supports the idea that MLB compensation is strongly shaped by the structure of the baseball labor market, including arbitration and free agency, in addition to on-field performance.
+
+The results from the simple models provide the foundation for the multiple regression analysis in the next sections. Rather than examining performance and labor-market variables separately, the next stage will combine the most important predictors to determine whether performance still has an independent relationship with salary after accounting for Service Time, Contract Regime, Age, and other factors. This will provide a more complete test of the central question of the project: Does Major League Baseball pay players primarily based on performance, or is salary more strongly determined by labor-market structure?
+
+# Introduction to Multiple Salary Models
+
+The simple salary models developed in the previous sections demonstrated that Major League Baseball salary determination is influenced by both player performance and labor-market structure, but the strength of these factors varies substantially. Individual performance measures such as WAR, RBI, wRC+, and xwOBA were statistically related to salary, but each explained only a relatively small portion of the overall variation in compensation. In contrast, Service Time, Age, and particularly Contract Regime produced substantially stronger relationships with salary. These results suggest that a player's position within the MLB labor market may be at least as important as, and potentially more important than, individual on-field performance when determining compensation.
+
+The primary purpose of this section is therefore to develop multiple regression models that evaluate these factors simultaneously. By combining player performance with Service Time, Age, Contract Regime, and other relevant player and organizational characteristics, the analysis can determine whether performance continues to have an independent relationship with salary after accounting for labor-market structure. This is important because the strong relationship between performance and salary observed in the simple models may partly reflect the fact that better players tend to have greater experience, longer service time, and access to more valuable contract opportunities.
+
+The first stage of the analysis will establish a baseline multiple regression model using the most important variables identified in the sections before. This provides a starting point for determining how much additional explanatory power is gained when performance and labor-market variables are considered together rather than separately. The analysis will then expand to an advanced salary model that incorporates the strongest predictors from the earlier sections, with particular attention given to Service Time, Age, Contract Regime, WAR, and organizational financial structure.
+
+The analysis will also investigate whether the relationship between player characteristics and salary is nonlinear. Salary does not necessarily increase at a constant rate throughout a player's career, so squared terms such as Age² and Service Time² will be considered to determine whether salary growth accelerates or slows at different stages of a player's career. These models will help determine whether the strong relationships identified in the sections before can be better represented through nonlinear effects.
+
+In addition, this section will examine interaction effects to determine whether the influence of one variable depends on another. In particular, the analysis will investigate whether the relationship between performance and salary changes across different contract regimes and whether performance is rewarded differently depending on a player's position or labor-market status. These interactions provide a way to examine whether the same level of player performance is valued equally across different circumstances.
+
+Model diagnostics will be used throughout the multiple regression analysis to evaluate whether the resulting models provide an appropriate representation of the salary data. Residual patterns, Q-Q plots, Scale-Location plots, leverage, and influential observations will be examined visually and descriptively. Because the previous diagnostics showed evidence of nonconstant variance and unusual observations, this will also specifically investigate heteroskedasticity and consider how it affects the interpretation of the regression results.
+
+Finally, the analysis will examine potential selection bias in the salary data. The dataset contains qualified MLB hitters rather than every player who could potentially receive a salary, meaning the observed sample may not represent the entire population of professional players. Considering this limitation is important when interpreting the estimated relationships between performance, experience, contract status, and compensation.
+
+Overall, the next sections will serve as the primary multiple-regression analysis of the project. The goal is not simply to maximize R², but to determine which factors remain important when the major sources of salary variation are considered simultaneously. The models developed in this section will provide a more realistic assessment of whether MLB compensation is primarily associated with player performance, labor-market position, or a combination of both, while also accounting for nonlinear relationships, interactions, model assumptions, and potential sources of bias.
+
+## Baseline Multiple Model
+
+The baseline multiple regression model was developed using the strongest and most relevant variables identified in the previous sections. The model includes Contract Regime, Service Time, Age, WAR, and xwOBA, allowing labor-market position, player experience, overall player value, and underlying offensive performance to be evaluated simultaneously. This provides a more appropriate starting point than the simple regressions because it allows the effect of each variable to be examined while controlling for the others.
+
+The overall baseline model was highly statistically significant, with an F-statistic of 812.9 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.7807 and an adjusted R² of 0.7797, meaning that approximately 78.07% of the variation in log salary was explained by the six model terms. The residual standard error was 0.6435, while the RMSE was 0.6418 and the MAE was 0.4627. These results represent a substantial improvement over the individual performance models from Section 5 and demonstrate the importance of considering labor-market and performance variables together.
+
+Contract Regime remained the most influential component of the model. Relative to the Pre-Arbitration reference group, players in the Arbitration regime had an estimated log salary that was 1.604 higher, while players in Free Agency had an estimated log salary that was 2.044 higher, holding the other variables constant. Both effects were highly statistically significant, with p-values below 2.2 × 10⁻¹⁶. The 95% confidence intervals were [1.500, 1.708] for Arbitration and [1.863, 2.225] for Free Agency. These results reinforce the findings from Section 5.6 that a player's position within the MLB contract system is one of the strongest factors associated with salary.
+
+Service Time also remained statistically significant after controlling for Contract Regime, Age, WAR, and xwOBA. Its coefficient was 0.0977, with a p-value of 7.29 × 10⁻¹³ and a 95% confidence interval of [0.0712, 0.1242]. This indicates that Service Time continues to have a positive relationship with salary even after accounting for the broader contract regime. However, its coefficient is substantially smaller than the standalone Service Time relationship from before, which suggests that part of the strong simple relationship between Service Time and salary was capturing differences between contract regimes.
+
+Age was the only predictor that was not statistically significant in the coefficient-level results. Its estimated coefficient was −0.00276, with a p-value of 0.771 and a 95% confidence interval of [−0.0213, 0.0158]. Therefore, after controlling for Contract Regime, Service Time, WAR, and xwOBA, there is little evidence that Age has an independent linear relationship with salary in this baseline model. The ANOVA table did identify a statistically significant sequential contribution for Age (p = 0.0385), but this result depends on the order in which the variables enter the model. The coefficient test is more directly useful for interpreting Age's unique relationship after accounting for the other predictors, and it does not provide evidence of a meaningful independent effect.
+
+WAR remained statistically significant in the multiple regression model. Its coefficient was 0.0433, with a p-value of 0.000147 and a 95% confidence interval of [0.0210, 0.0655]. This indicates that overall player value continues to be associated with higher salary even after controlling for Contract Regime, Service Time, Age, and xwOBA. This is an important result for the project's central question because it shows that performance still contributes to compensation once major labor-market factors are accounted for.
+
+xwOBA was also statistically significant, with a coefficient of 3.6263, a p-value of 3.81 × 10⁻⁸, and a 95% confidence interval of [2.3402, 4.9125]. This suggests that underlying offensive quality, as measured by expected weighted on-base average, provides additional information about salary beyond the contribution of WAR and the labor-market variables. The result supports the idea that organizations may reward both overall player value and underlying offensive skill when determining compensation.
+
+The ANOVA results further demonstrate the importance of the variables in the model. Contract Regime accounted for the largest sequential contribution, with an F-statistic of 2342.77. Service Time, WAR, and xwOBA also made statistically significant sequential contributions, while Age had the smallest contribution. However, because ANOVA contributions depend on predictor order, these results should be interpreted as evidence of sequential contribution rather than as a definitive ranking of each variable's independent importance.
+
+The diagnostic plots indicate that the baseline model improves substantially over the simple models but still does not perfectly satisfy the standard regression assumptions. The Residuals-versus-Fitted plot shows some structure in the residuals and several observations with relatively large positive or negative residuals. The Q-Q plot shows clear departures from the reference line in both tails, indicating that the residuals are not perfectly normally distributed and that several observations are unusually far from the expected values. The Scale-Location plot also shows variation in the spread of residuals across fitted values, suggesting that constant variance is not completely satisfied.
+
+The leverage and Cook's distance plots identify several observations that deserve attention. Observations such as 340, 464, and 593 have noticeably larger Cook's distances than most of the sample, while observations around 340, 404, and 593 show relatively high leverage and large standardized residuals. These observations may have a greater influence on the fitted regression coefficients than typical players. However, the Cook's distance plot does not indicate that one observation overwhelmingly dominates the entire model. Instead, the influential observations appear to represent a relatively small number of unusual salary or player-value combinations.
+
+The actual-versus-predicted plot shows a clear positive relationship between observed and predicted log salary, although the points do not fall perfectly along the 45-degree reference line. In particular, there are observations where the model substantially underpredicts or overpredicts salary. This is consistent with the diagnostic results and indicates that, despite explaining approximately 78% of the variation in log salary, the model still leaves meaningful differences in compensation unexplained.
+
+Overall, the baseline model provides strong evidence that labor-market structure remains the dominant component of MLB salary determination, while player performance continues to provide significant additional explanatory power. Contract Regime and Service Time remain important after controlling for performance, while both WAR and xwOBA remain statistically significant. Age, however, does not appear to have a meaningful independent linear effect once these other variables are included.
+
+This model provides an important benchmark for the remainder of this section. The next step is to determine whether additional variables can improve upon this baseline model and whether the relationships identified here become stronger when organizational factors and other relevant characteristics are incorporated.
+
+```{r}
+###############################################################
+# Baseline Multiple Salary Model
+###############################################################
+
+###############################################################
+# Fit the Baseline Multiple Salary Model
+###############################################################
+
+baseline_salary_model <- lm(log_salary ~ Contract_Regime +
+                                            Service_Time +
+                                            Age +
+                                            WAR +
+                                            xwOBA,
+                            data = hitters)
+
+###############################################################
+# Display the Regression Results
+###############################################################
+
+summary(baseline_salary_model)
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+# Calculate 95% confidence intervals for each coefficient.
+
+confint(baseline_salary_model)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+anova(baseline_salary_model)
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(baseline_salary_model)$r.squared
+
+summary(baseline_salary_model)$adj.r.squared
+
+summary(baseline_salary_model)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_salary <- predict(baseline_salary_model)
+
+
+# Root Mean Squared Error (RMSE)
+
+rmse <- sqrt(mean((hitters$log_salary - predicted_salary)^2))
+
+rmse
+
+
+# Mean Absolute Error (MAE)
+
+mae <- mean(abs(hitters$log_salary - predicted_salary))
+
+mae
+
+
+###############################################################
+# Model Performance Summary
+###############################################################
+
+baseline_salary_results <- data.frame(
+  Model = "Baseline Salary Model",
+  R_Squared = summary(baseline_salary_model)$r.squared,
+  Adjusted_R_Squared = summary(baseline_salary_model)$adj.r.squared,
+  RSE = summary(baseline_salary_model)$sigma,
+  RMSE = rmse,
+  MAE = mae
+)
+
+baseline_salary_results
+
+
+###############################################################
+# Predicted Values
+###############################################################
+
+baseline_predictions <- data.frame(
+  Actual_Log_Salary = hitters$log_salary,
+  Predicted_Log_Salary = predicted_salary
+)
+
+head(baseline_predictions)
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+
+
+# Residuals vs Fitted
+
+plot(baseline_salary_model,
+     which = 1)
+
+
+# Normal Q-Q Plot
+
+plot(baseline_salary_model,
+     which = 2)
+
+
+# Scale-Location Plot
+
+plot(baseline_salary_model,
+     which = 3)
+
+
+# Cook's Distance
+
+plot(baseline_salary_model,
+     which = 4)
+
+
+# Residuals vs Leverage
+
+plot(baseline_salary_model,
+     which = 5)
+
+
+###############################################################
+# Actual vs Predicted Log Salary
+###############################################################
+
+plot(hitters$log_salary,
+     predicted_salary,
+     main = "Actual vs Predicted Log(Salary)",
+     xlab = "Actual Log(Salary)",
+     ylab = "Predicted Log(Salary)",
+     pch = 16)
+
+abline(0, 1, lwd = 2)
+```
+
+## Advanced Multiple Model
+
+The advanced multiple regression model builds upon the baseline model from this section by adding wRC+, Financial Tier, and Position. These variables were selected based on the findings from the previous sections and were included to determine whether additional measures of offensive performance, organizational structure, and player role provide meaningful information about salary after controlling for Contract Regime, Service Time, Age, WAR, and xwOBA.
+
+The advanced model was highly statistically significant overall, with an F-statistic of 338 and a p-value below 2.2 × 10⁻¹⁶. The model produced an R² of 0.7884 and an adjusted R² of 0.7860, meaning that approximately 78.84% of the variation in log salary was explained by the predictors in the model. This represents an increase from the baseline model's R² of 0.7807 and adjusted R² of 0.7797. The residual standard error decreased from 0.6435 to 0.6342, while RMSE decreased from 0.6418 to 0.6305 and MAE decreased from 0.4627 to 0.4563. Therefore, the advanced model provides a modest improvement in both explanatory power and prediction accuracy.
+
+Contract Regime remained by far the strongest component of the model. Relative to the Pre-Arbitration reference group, the estimated log salary was 1.606 higher for Arbitration players and 2.041 higher for Free Agency players, holding all other variables constant. Both coefficients were highly statistically significant, with p-values below 2.2 × 10⁻¹⁶. Their 95% confidence intervals were [1.502, 1.709] for Arbitration and [1.862, 2.220] for Free Agency. These estimates are extremely similar to those from the baseline model, where the corresponding coefficients were 1.604 and 2.044. This stability is important because it demonstrates that adding the additional variables did not substantially change the estimated effect of Contract Regime. The large differences between contract stages therefore remain a central feature of the salary model.
+
+Service Time also remained statistically significant. Its coefficient was 0.0957, with a p-value of 1.45 × 10⁻¹² and a 95% confidence interval of [0.0695, 0.1220]. The coefficient is again very similar to the baseline estimate of 0.0977. This indicates that Service Time continues to have a positive relationship with salary even after accounting for Contract Regime, player performance, Financial Tier, and Position.
+
+Age remained statistically insignificant. Its coefficient was −0.0008, with a p-value of 0.934 and a 95% confidence interval of [−0.0198, 0.0182]. This provides essentially no evidence of an independent linear relationship between Age and salary after controlling for the other variables. Although the sequential ANOVA table shows that Age was statistically significant when entered into the model at that stage (p = 0.0358), this result depends on the order of the predictors in the ANOVA. The coefficient-level result provides stronger evidence that Age does not have a meaningful independent effect once the other variables are controlled for. This also supports examining nonlinear age effects later rather than assuming that salary changes linearly with age.
+
+WAR remained statistically significant and became somewhat stronger in the advanced model. Its coefficient increased from 0.0433 in the baseline model to 0.0707 in the advanced model, with a p-value of 8.68 × 10⁻⁵ and a 95% confidence interval of [0.0355, 0.1059]. This indicates that overall player value continues to be positively associated with salary after controlling for labor-market structure, offensive skill, team financial tier, and position. The continued significance of WAR is particularly important to the project's central question because it demonstrates that performance retains an independent relationship with compensation even after accounting for the major structural factors affecting salary.
+
+xwOBA also remained statistically significant. Its coefficient was 3.4174, with a p-value of 0.000578 and a 95% confidence interval of [1.4741, 5.3607]. Although the estimated coefficient decreased slightly from the baseline model's 3.6263, xwOBA continued to provide statistically significant information about salary. This suggests that underlying offensive performance contains information about compensation beyond what is captured by WAR and the labor-market variables.
+
+In contrast, wRC+ was not statistically significant in the advanced model. Its coefficient was −0.00289, with a p-value of 0.162 and a 95% confidence interval of [−0.00695, 0.00116]. The ANOVA table similarly showed essentially no sequential contribution from wRC+, with an F-statistic of only 0.040 and a p-value of 0.842. This is an important result because wRC+ had a statistically significant relationship with salary in its simple regression. Once Contract Regime, Service Time, Age, WAR, xwOBA, Financial Tier, and Position are included, however, wRC+ does not appear to provide additional independent explanatory power. This demonstrates why simple regression results can overstate the importance of a variable when related factors are not controlled for.
+
+Financial Tier provided additional explanatory power in the advanced model. Both the Mid Market and Small Market indicators were statistically significant relative to the reference financial tier. The estimated coefficient for Mid Market was −0.1029 (p = 0.0136), while the coefficient for Small Market was −0.2149 (p < 2.2 × 10⁻¹⁶). Their confidence intervals were [−0.1847, −0.0212] and [−0.2997, −0.1300], respectively. This suggests that, after controlling for the other variables, players in the Mid Market and Small Market groups tended to have lower log salaries than players in the reference financial tier. However, these effects are much smaller than the effects associated with Contract Regime. Therefore, Financial Tier appears to have an additional relationship with salary, but it is considerably less important than labor-market status.
+
+Position also contributed significantly to the model overall. The ANOVA table produced an F-statistic of 3.945 with a p-value of 0.000644, indicating that Position provides additional explanatory information when considered as a group. Several individual position coefficients were also statistically significant relative to the reference position. The coefficients for 2B, 3B, C, DH, and SS were negative and statistically significant, while the OF coefficient was not significant at the 0.05 level. This indicates that salary differences exist across positions even after controlling for Contract Regime, Service Time, Age, WAR, xwOBA, wRC+, and Financial Tier. However, the relatively small overall contribution of Position compared with Contract Regime indicates that position is a secondary factor rather than a primary driver of salary.
+
+The comparison with the baseline model provides evidence that the additional variables collectively improve model fit. The baseline model had an R² of 0.7807, compared with 0.7884 for the advanced model. Adjusted R² increased from 0.7797 to 0.7860. More importantly, the nested-model ANOVA produced an F-statistic of 5.48 with a p-value of 1.99 × 10⁻⁷, indicating that the nine additional degrees of freedom associated with wRC+, Financial Tier, and Position produced a statistically significant improvement in model fit. Therefore, although the improvement in R² is relatively modest, the additional variables collectively contribute useful information.
+
+The information criteria provide a somewhat more cautious interpretation. AIC decreased from 2702.62 for the baseline model to 2671.60 for the advanced model, favoring the advanced model. However, BIC increased from 2744.44 to 2760.47. Because BIC applies a stronger penalty for additional parameters, its result suggests that the improvement in fit may not be large enough to justify all of the additional complexity. This distinction is useful: the advanced model statistically improves upon the baseline, but the improvement is relatively modest compared with the nine additional degrees of freedom required.
+
+The diagnostic plots continue to show some of the same issues identified in the previous section. The Residuals-versus-Fitted plot shows that the residuals are generally centered around zero but still contain some structure and several unusually large residuals. The Scale-Location plot indicates that the spread of residuals is not perfectly constant across fitted values, suggesting that some heteroskedasticity remains. The Q-Q plot, which was visually similar to the baseline model, shows departures from the reference line in the tails, indicating that the residuals are not perfectly normally distributed.
+
+The influence diagnostics also continue to identify some unusual observations. Observations such as 75, 294, and 1103 appear among the more unusual cases in the residual plots. The Cook's distance and leverage plots also identify observations with greater influence than the majority of the sample. However, the diagnostic results do not suggest that a single observation completely determines the model. Instead, the unusual observations appear to represent a small number of players whose salaries differ substantially from what would be expected based on their measured characteristics.
+
+The actual-versus-predicted plot shows a clear positive relationship between observed and predicted log salary, although there is still substantial scatter around the 45-degree reference line. The model performs particularly well for the main concentration of observations but has difficulty with some players whose actual salaries are substantially higher or lower than their predicted salaries. This reinforces the idea that even a model explaining nearly 79% of the variation does not capture every factor involved in MLB salary determination.
+
+Overall, the advanced model provides a modest but statistically significant improvement over the baseline model. Contract Regime and Service Time remain highly important, while WAR and xwOBA continue to provide independent information about salary. Financial Tier and Position also add meaningful information, whereas wRC+ does not remain significant once the other variables are controlled for. Age continues to show little evidence of an independent linear effect.
+
+These findings further strengthen the central conclusion of the project: MLB salary is determined by a combination of player performance and labor-market structure, but labor-market factors remain dominant. The relatively small improvement from adding wRC+, Financial Tier, and Position also suggests that simply adding more performance statistics does not necessarily produce a substantially better salary model. The next step is therefore to examine whether the relationships captured by the advanced model are better represented through nonlinear effects, particularly for Age and Service Time, rather than continuing to add more linear predictors.
+
+```{r}
+###############################################################
+# Advanced Multiple Salary Model
+###############################################################
+
+
+###############################################################
+# Fit the Advanced Multiple Salary Model
+###############################################################
+
+advanced_salary_model <- lm(log_salary ~ Contract_Regime +
+                                             Service_Time +
+                                             Age +
+                                             WAR +
+                                             xwOBA +
+                                             wRC_plus +
+                                             financial_tier +
+                                             Position,
+                             data = hitters)
+
+
+###############################################################
+# Display the Regression Results
+###############################################################
+
+
+summary(advanced_salary_model)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+# Calculate 95% confidence intervals for each coefficient.
+
+confint(advanced_salary_model)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+
+anova(advanced_salary_model)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+
+summary(advanced_salary_model)$r.squared
+
+summary(advanced_salary_model)$adj.r.squared
+
+summary(advanced_salary_model)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+
+predicted_salary <- predict(advanced_salary_model)
+
+
+# Root Mean Squared Error (RMSE)
+
+rmse <- sqrt(mean((hitters$log_salary - predicted_salary)^2))
+
+rmse
+
+
+# Mean Absolute Error (MAE)
+
+mae <- mean(abs(hitters$log_salary - predicted_salary))
+
+mae
+
+
+###############################################################
+# Model Performance Summary
+###############################################################
+
+
+advanced_salary_results <- data.frame(
+  Model = "Advanced Salary Model",
+  R_Squared = summary(advanced_salary_model)$r.squared,
+  Adjusted_R_Squared = summary(advanced_salary_model)$adj.r.squared,
+  RSE = summary(advanced_salary_model)$sigma,
+  RMSE = rmse,
+  MAE = mae
+)
+
+advanced_salary_results
+
+
+###############################################################
+# Compare Advanced Model to Baseline Model
+###############################################################
+
+summary(baseline_salary_model)$r.squared
+summary(advanced_salary_model)$r.squared
+
+summary(baseline_salary_model)$adj.r.squared
+summary(advanced_salary_model)$adj.r.squared
+
+
+# Compare AIC values.
+
+AIC(baseline_salary_model, advanced_salary_model)
+
+
+# Compare BIC values.
+
+BIC(baseline_salary_model, advanced_salary_model)
+
+
+anova(baseline_salary_model, advanced_salary_model)
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+# Residuals vs Fitted
+
+
+plot(advanced_salary_model,
+     which = 1)
+
+
+# Normal Q-Q Plot
+
+
+plot(advanced_salary_model,
+     which = 2)
+
+
+# Scale-Location Plot
+
+
+plot(advanced_salary_model,
+     which = 3)
+
+
+# Cook's Distance
+
+
+plot(advanced_salary_model,
+     which = 4)
+
+
+# Residuals vs Leverage
+
+
+plot(advanced_salary_model,
+     which = 5)
+
+
+###############################################################
+# Actual vs Predicted Log Salary
+###############################################################
+
+
+plot(hitters$log_salary,
+     predicted_salary,
+     main = "Actual vs Predicted Log(Salary)",
+     xlab = "Actual Log(Salary)",
+     ylab = "Predicted Log(Salary)",
+     pch = 16)
+
+
+abline(0, 1, lwd = 2)
+```
+
+## Nonlinear Multiple Model
+
+The previous sections showed that salary is strongly associated with labor-market variables such as contract regime and service time, while performance measures such as WAR and xwOBA provide additional explanatory power. However, these relationships may not necessarily be linear. A player's salary may increase rapidly early in a career, change more gradually as the player gains experience, and eventually level off or decline. Similarly, the financial reward for additional WAR may not be constant across all levels of performance. To investigate these possibilities, quadratic terms were added for WAR, age, and service time.
+
+The first set of models examined each nonlinear relationship independently. The quadratic WAR model produced an R-squared of only 0.0137 and an adjusted R-squared of 0.0123, indicating that WAR and WAR² together explain very little of the variation in log salary. Although both terms were statistically significant, with WAR having a coefficient of -0.1107 (p = 0.016) and WAR² having a coefficient of 0.0224 (p < 0.001), the overall explanatory power of the model remained extremely low. The scatterplot also shows substantial variation in salary at nearly every level of WAR. This suggests that while the relationship may contain some curvature, performance measured by WAR alone is not sufficient to explain salary determination.
+
+The quadratic age model was substantially stronger. Age and Age² together produced an R-squared of 0.4771 and an adjusted R-squared of 0.4763, compared with the approximately 44.6% explained by the linear age model in a previous section. Both terms were statistically significant: the Age coefficient was 1.0357 (p < 2e-16), while the Age² coefficient was -0.0135 (p < 2e-16). The negative squared term indicates an inverted-U relationship, meaning that salary tends to increase with age at younger ages but the rate of increase slows as players become older. The scatterplot supports this general pattern, with salaries generally increasing through the middle portion of a player's career before leveling off at older ages.
+
+The quadratic service-time model produced the strongest of the three individual nonlinear models. Service Time and Service Time² produced an R-squared of 0.7439 and an adjusted R-squared of 0.7436, compared with approximately 60.4% for the linear Service Time model. Both terms were highly significant, with Service Time having a coefficient of 0.6775 and ServiceTime² having a coefficient of -0.0307, both with p-values less than 2e-16. The negative coefficient on ServiceTime² indicates that salary increases with service time but at a decreasing rate. This matches the scatterplot particularly well: salary rises rapidly during the early stages of a player's career, begins to level off around the later arbitration/free-agency years, and eventually declines among players with very high service time. This provides strong evidence that a simple linear relationship does not fully capture how experience relates to compensation.
+
+After examining these individual relationships, the nonlinear terms were incorporated into the full salary model developed. The final nonlinear model included Contract Regime, Service Time, ServiceTime², Age, Age², WAR, WAR², xwOBA, wRC+, Financial Tier, and Position. This model produced an R-squared of 0.8028 and an adjusted R-squared of 0.8002, compared with 0.7884 and 0.7860, respectively, for the advanced linear model. The residual standard error decreased from 0.6342 to 0.6129, while RMSE decreased from 0.6305 to 0.6086 and MAE decreased from 0.4563 to 0.4364. These changes indicate that allowing nonlinear relationships improves the model's ability to explain and predict log salary.
+
+The comparison between the advanced and nonlinear models also provides strong evidence that the additional quadratic terms improve model fit. The ANOVA comparison produced an F-statistic of 33.137 with a p-value less than 2.2e-16, indicating that the nonlinear model explains significantly more variation than the advanced linear model. AIC also decreased from 2671.598 for the advanced model to 2580.315 for the nonlinear model, while BIC decreased from 2760.468 to 2684.868. Both information criteria therefore favor the nonlinear specification despite the additional parameters.
+
+Not all nonlinear terms remained important after controlling for the other variables, however. ServiceTime² remained highly significant (p = 2.14e-14), providing strong evidence that the effect of service time on salary is nonlinear even after accounting for contract regime and the other predictors. In contrast, Age² was not statistically significant (p = 0.256) and WAR² was also not statistically significant at the 0.05 level (p = 0.353). The linear Age term was also not significant in the final model (p = 0.325), while WAR was only marginally significant (p = 0.090). This suggests that the strong individual quadratic relationships observed for age and WAR are partly explained by other variables in the full salary model, particularly labor-market factors.
+
+The strongest nonlinear evidence therefore comes from service time. The results suggest that salary does not simply increase by a constant amount for every additional year of experience. Instead, salary growth is much stronger earlier in a player's career and gradually levels off as service time increases. This is consistent with the contract structure examined earlier, where players move through different stages of the MLB labor market.
+
+Overall, the nonlinear analysis improves upon the advanced linear salary model and provides a more realistic representation of salary determination. The increase in adjusted R-squared from 0.7860 to 0.8002, along with the reductions in RMSE and MAE and the significant nested-model comparison, demonstrates that nonlinear effects provide meaningful additional information. However, the results also show that not every variable benefits from a quadratic specification. Service time is the clearest nonlinear factor, while the evidence for nonlinear age and WAR effects becomes much weaker once the full set of labor-market, performance, organizational, and positional variables is considered.
+
+```{r}
+###############################################################
+# Nonlinear Salary Models
+###############################################################
+
+###############################################################
+# Create Squared Variables
+###############################################################
+
+hitters$Age2 <- hitters$Age^2
+
+
+
+hitters$ServiceTime2 <- hitters$Service_Time^2
+
+
+
+hitters$WAR2 <- hitters$WAR^2
+
+
+###############################################################
+# Model 1: Quadratic WAR Model
+###############################################################
+
+
+salary_quad_war <- lm(log_salary ~ WAR + WAR2,
+                      data = hitters)
+
+summary(salary_quad_war)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+# Calculate 95% confidence intervals for the coefficients.
+
+confint(salary_quad_war)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_quad_war)$r.squared
+
+summary(salary_quad_war)$adj.r.squared
+
+summary(salary_quad_war)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_quad_war <- predict(salary_quad_war)
+
+rmse_quad_war <- sqrt(
+  mean((hitters$log_salary - predicted_quad_war)^2)
+)
+
+rmse_quad_war
+
+mae_quad_war <- mean(
+  abs(hitters$log_salary - predicted_quad_war)
+)
+
+mae_quad_war
+
+
+###############################################################
+# Compare Linear WAR Model to Quadratic WAR Model
+###############################################################
+
+
+anova(salary_model, salary_quad_war)
+
+AIC(salary_model, salary_quad_war)
+
+BIC(salary_model, salary_quad_war)
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_quad_war)
+
+par(mfrow = c(1,1))
+
+
+###############################################################
+# Scatterplot: WAR vs Log Salary
+###############################################################
+
+plot(hitters$WAR,
+     hitters$log_salary,
+     main = "Log Salary vs WAR",
+     xlab = "WAR",
+     ylab = "Log Salary",
+     pch = 16)
+
+
+war_order <- order(hitters$WAR)
+
+lines(hitters$WAR[war_order],
+      predict(salary_quad_war)[war_order],
+      lwd = 2)
+
+
+###############################################################
+# Model 2: Quadratic Age Model
+###############################################################
+
+
+salary_quad_age <- lm(log_salary ~ Age + Age2,
+                      data = hitters)
+
+summary(salary_quad_age)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(salary_quad_age)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_quad_age)$r.squared
+
+summary(salary_quad_age)$adj.r.squared
+
+summary(salary_quad_age)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_quad_age <- predict(salary_quad_age)
+
+rmse_quad_age <- sqrt(
+  mean((hitters$log_salary - predicted_quad_age)^2)
+)
+
+rmse_quad_age
+
+mae_quad_age <- mean(
+  abs(hitters$log_salary - predicted_quad_age)
+)
+
+mae_quad_age
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_quad_age)
+
+par(mfrow = c(1,1))
+
+
+###############################################################
+# Scatterplot: Age vs Log Salary
+###############################################################
+
+plot(hitters$Age,
+     hitters$log_salary,
+     main = "Log Salary vs Age",
+     xlab = "Age",
+     ylab = "Log Salary",
+     pch = 16)
+
+# Add the quadratic regression curve.
+
+age_order <- order(hitters$Age)
+
+lines(hitters$Age[age_order],
+      predict(salary_quad_age)[age_order],
+      lwd = 2)
+
+
+###############################################################
+# Model 3: Quadratic Service Time Model
+###############################################################
+
+
+salary_quad_service <- lm(log_salary ~ Service_Time +
+                                            ServiceTime2,
+                          data = hitters)
+
+summary(salary_quad_service)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(salary_quad_service)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_quad_service)$r.squared
+
+summary(salary_quad_service)$adj.r.squared
+
+summary(salary_quad_service)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_quad_service <- predict(salary_quad_service)
+
+rmse_quad_service <- sqrt(
+  mean((hitters$log_salary - predicted_quad_service)^2)
+)
+
+rmse_quad_service
+
+mae_quad_service <- mean(
+  abs(hitters$log_salary - predicted_quad_service)
+)
+
+mae_quad_service
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_quad_service)
+
+par(mfrow = c(1,1))
+
+
+###############################################################
+# Scatterplot: Service Time vs Log Salary
+###############################################################
+
+plot(hitters$Service_Time,
+     hitters$log_salary,
+     main = "Log Salary vs Service Time",
+     xlab = "Service Time",
+     ylab = "Log Salary",
+     pch = 16)
+
+
+service_order <- order(hitters$Service_Time)
+
+lines(hitters$Service_Time[service_order],
+      predict(salary_quad_service)[service_order],
+      lwd = 2)
+
+
+###############################################################
+# Compare the Three Quadratic Models
+###############################################################
+
+quadratic_salary_results <- data.frame(
+
+  Model = c(
+    "Quadratic WAR",
+    "Quadratic Age",
+    "Quadratic Service Time"
+  ),
+
+  R_Squared = c(
+    summary(salary_quad_war)$r.squared,
+    summary(salary_quad_age)$r.squared,
+    summary(salary_quad_service)$r.squared
+  ),
+
+  Adjusted_R_Squared = c(
+    summary(salary_quad_war)$adj.r.squared,
+    summary(salary_quad_age)$adj.r.squared,
+    summary(salary_quad_service)$adj.r.squared
+  ),
+
+  RSE = c(
+    summary(salary_quad_war)$sigma,
+    summary(salary_quad_age)$sigma,
+    summary(salary_quad_service)$sigma
+  ),
+
+  RMSE = c(
+    rmse_quad_war,
+    rmse_quad_age,
+    rmse_quad_service
+  ),
+
+  MAE = c(
+    mae_quad_war,
+    mae_quad_age,
+    mae_quad_service
+  )
+)
+
+quadratic_salary_results
+
+
+###############################################################
+# Build the Final Nonlinear Salary Model
+###############################################################
+
+
+nonlinear_salary_model <- lm(
+  log_salary ~ Contract_Regime +
+               Service_Time +
+               ServiceTime2 +
+               Age +
+               Age2 +
+               WAR +
+               WAR2 +
+               xwOBA +
+               wRC_plus +
+               financial_tier +
+               Position,
+  data = hitters
+)
+
+
+###############################################################
+# Display the Nonlinear Model Results
+###############################################################
+
+summary(nonlinear_salary_model)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(nonlinear_salary_model)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+anova(nonlinear_salary_model)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(nonlinear_salary_model)$r.squared
+
+summary(nonlinear_salary_model)$adj.r.squared
+
+summary(nonlinear_salary_model)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_nonlinear_salary <- predict(nonlinear_salary_model)
+
+
+# RMSE
+
+rmse_nonlinear <- sqrt(
+  mean((hitters$log_salary -
+          predicted_nonlinear_salary)^2)
+)
+
+rmse_nonlinear
+
+
+# MAE
+
+mae_nonlinear <- mean(
+  abs(hitters$log_salary -
+        predicted_nonlinear_salary)
+)
+
+mae_nonlinear
+
+
+###############################################################
+# Compare Advanced and Nonlinear Models
+###############################################################
+
+
+anova(advanced_salary_model,
+      nonlinear_salary_model)
+
+
+# Compare AIC
+
+AIC(advanced_salary_model,
+    nonlinear_salary_model)
+
+
+# Compare BIC
+
+BIC(advanced_salary_model,
+    nonlinear_salary_model)
+
+
+###############################################################
+# Final Nonlinear Model Results
+###############################################################
+
+nonlinear_salary_results <- data.frame(
+
+  Model = "Nonlinear Salary Model",
+
+  R_Squared =
+    summary(nonlinear_salary_model)$r.squared,
+
+  Adjusted_R_Squared =
+    summary(nonlinear_salary_model)$adj.r.squared,
+
+  RSE =
+    summary(nonlinear_salary_model)$sigma,
+
+  RMSE =
+    rmse_nonlinear,
+
+  MAE =
+    mae_nonlinear
+)
+
+nonlinear_salary_results
+
+
+###############################################################
+# Diagnostic Plots for Final Nonlinear Model
+###############################################################
+
+# Residuals vs Fitted
+
+plot(nonlinear_salary_model,
+     which = 1)
+
+
+# Normal Q-Q Plot
+
+plot(nonlinear_salary_model,
+     which = 2)
+
+
+# Scale-Location Plot
+
+plot(nonlinear_salary_model,
+     which = 3)
+
+
+# Cook's Distance
+
+plot(nonlinear_salary_model,
+     which = 4)
+
+
+# Residuals vs Leverage
+
+plot(nonlinear_salary_model,
+     which = 5)
+
+
+###############################################################
+# Actual vs Predicted Log Salary
+###############################################################
+
+plot(hitters$log_salary,
+     predicted_nonlinear_salary,
+     main = "Actual vs Predicted Log(Salary)",
+     xlab = "Actual Log(Salary)",
+     ylab = "Predicted Log(Salary)",
+     pch = 16)
+
+abline(0, 1, lwd = 2)
+```
+
+## Interaction Effects
+
+The interaction models were used to determine whether the relationship between player performance and salary changes depending on a player's labor-market position, service time, or team financial tier. Because the earlier sections showed that contract regime and service time were among the strongest predictors of salary, these interactions are particularly useful for determining whether the value of player performance is rewarded differently across different stages of a player's career.
+
+Contract Regime × WAR
+
+The first interaction model examined whether the relationship between WAR and salary differs between pre-arbitration, arbitration, and free agency players. The overall model explained approximately 79.07% of the variation in log salary, with an adjusted R² of 78.81%. The residual standard error was 0.6312, with an RMSE of 0.6270 and an MAE of 0.4536.
+
+The main effect of WAR was not statistically significant by itself (p = 0.140), indicating that among pre-arbitration players, there was not strong evidence of a relationship between WAR and salary after controlling for the other variables in the model. However, the interaction terms were important. The Arbitration × WAR interaction was statistically significant (p = 0.0498), while the Free Agency × WAR interaction was even stronger (p = 0.000103). This indicates that the relationship between player performance and salary changes as players move into arbitration and free agency.
+
+The positive interaction coefficients also indicate that the return to WAR becomes stronger in these later contract regimes. The Arbitration × WAR coefficient was 0.0432, while the Free Agency × WAR coefficient was 0.0832. This suggests that additional player value is associated with a larger increase in salary for arbitration and especially free-agent players than for pre-arbitration players.
+
+The overall ANOVA also supported the importance of the interaction. The Contract Regime × WAR term was significant with F = 7.59 and p = 0.0005264. Therefore, there is evidence that WAR is valued differently depending on a player's contract regime.
+
+The actual-versus-predicted plot shows that the model captures the general upward relationship between actual and predicted log salary, but there is still substantial scatter around the 45-degree reference line. In particular, many of the lower-salary observations are predicted substantially higher than their actual salaries, while a large group of middle- and higher-salary observations is concentrated above or below the reference line. This suggests that the model captures broad salary differences but does not perfectly predict individual salaries.
+
+Contract Regime × xwOBA
+
+The second interaction model replaced WAR with xwOBA to determine whether the relationship between Statcast-based expected offensive performance and salary changes across contract regimes. This model had an R² of 79.09% and an adjusted R² of 78.83%, making it very similar to the Contract Regime × WAR model. Its RMSE was 0.6268 and its MAE was 0.4525, which were slightly better than the Contract Regime × WAR model.
+
+Unlike the previous model, the main xwOBA effect was not statistically significant (p = 0.750) after controlling for contract regime and the other variables. However, both interaction terms were highly significant. The Arbitration × xwOBA interaction had a coefficient of 4.749 with p = 0.000220, while the Free Agency × xwOBA interaction had a coefficient of 4.291 with p = 0.000750.
+
+This suggests that xwOBA has a different relationship with salary depending on contract regime. The fact that the interactions are positive and significant indicates that Statcast-based offensive performance becomes more strongly associated with salary once players reach arbitration or free agency. This provides additional evidence that player performance is valued differently depending on where the player is in the labor market.
+
+The actual-versus-predicted plot for this model looks very similar to the Contract Regime × WAR model. There is a clear overall positive relationship, but the observations do not fall tightly around the reference line. The model therefore does a reasonable job capturing broad salary patterns while still leaving considerable unexplained variation for individual players.
+
+Service Time × WAR
+
+The third model examined whether the effect of WAR on salary changes as players accumulate more service time. This model produced the highest R² and adjusted R² of the four interaction models, with an R² of 79.11% and an adjusted R² of 78.86%. It also had the lowest residual standard error (0.6304) and the lowest RMSE (0.6264) among the four models.
+
+Most importantly, the Service Time × WAR interaction was statistically significant, with a coefficient of 0.0107 and a p-value of 2.67 × 10⁻⁵. Its 95% confidence interval ranged from approximately 0.0057 to 0.0156, which does not include zero.
+
+This indicates that the relationship between player performance and salary becomes stronger as service time increases. In other words, the financial value of an additional unit of WAR is not constant throughout a player's career. Players with greater service time appear to receive a larger salary benefit from their performance than players earlier in their careers.
+
+This result fits particularly well with the labor-market findings from Sections 5.6 and 5.7. Service time determines when players gain access to stronger bargaining positions, while performance determines how valuable those players are once they reach those stages. The significant interaction therefore suggests that performance and labor-market position work together rather than independently.
+
+The actual-versus-predicted plot for this model again shows a clear overall relationship between actual and predicted salary. However, there are several groups of observations that fall noticeably away from the reference line. The model particularly struggles with some lower-salary players, whose salaries are substantially below the model's predictions. Thus, although the model has the strongest overall fit of the four interaction models, there is still considerable individual-level variation that is not captured.
+
+Financial Tier × WAR
+
+The final interaction model examined whether the relationship between WAR and salary differs between Big Market, Mid Market, and Small Market teams. This model had an R² of 78.86% and an adjusted R² of 78.60%, which was the lowest fit among the four interaction models. Its RMSE was 0.6301 and its MAE was 0.4555, also making it the weakest of the four models based on prediction error.
+
+More importantly, neither of the financial-tier interaction terms was statistically significant. The Mid Market × WAR interaction had a p-value of 0.756, while the Small Market × WAR interaction had a p-value of 0.314. The overall interaction was also not significant, with F = 0.852 and p = 0.427.
+
+This suggests that there is not strong evidence that the relationship between WAR and salary changes depending on the financial tier of the team. While financial tier itself was significant in the overall model, the effect of WAR does not appear to differ substantially between the three market categories.
+
+The actual-versus-predicted plot for this model also shows the same general pattern as the other interaction models: predictions follow the broad upward trend in salary, but many observations remain considerably separated from the reference line. This reinforces the idea that financial tier provides some information about salary levels, but it does not appear to change how WAR is rewarded.
+
+Overall Comparison of the Interaction Models
+
+Overall, the interaction analysis provides the strongest evidence for labor-market interactions rather than financial-market interactions. The Service Time × WAR model produced the highest R² (79.11%) and adjusted R² (78.86%), as well as the lowest RMSE (0.6264). It also had the lowest AIC (2655.735) and BIC (2749.833) among the four models, suggesting that it provided the best overall balance of fit and model complexity.
+
+The Contract Regime × xwOBA model had the lowest MAE (0.4525), while the Contract Regime × WAR model also performed very similarly. More importantly, both contract-regime interactions were statistically significant, showing that the relationship between player performance and salary changes substantially between pre-arbitration, arbitration, and free agency.
+
+In contrast, the Financial Tier × WAR interaction was not statistically significant and produced the weakest fit of the four models. This suggests that while team financial structure may influence salary levels, it does not appear to substantially change the amount players are rewarded for their performance.
+
+The actual-versus-predicted plots across all four models show a similar overall pattern. Each model captures the general positive relationship between actual and predicted log salary, but the points are not tightly concentrated around the 45-degree line. There is particularly noticeable overprediction among some of the lower-paid players, while the higher-salary observations show more moderate but still meaningful deviations. Therefore, the interaction models improve the explanation of salary differences without completely eliminating the large amount of player-to-player variation.
+
+Conclusion
+
+The interaction analysis provides an important addition to the earlier salary models. The results suggest that performance does not have a constant financial value throughout a player's career. Instead, the value of performance appears to increase as players accumulate service time and move into stronger labor-market positions.
+
+The strongest evidence comes from the Service Time × WAR interaction and the Contract Regime × WAR interaction. Both indicate that the relationship between player performance and salary depends on a player's position within the MLB labor market. The Contract Regime × xwOBA model provides similar evidence using a Statcast-based performance measure.
+
+On the other hand, the Financial Tier × WAR interaction was not significant, suggesting that team financial tier does not substantially change how WAR translates into salary. Overall, these results strengthen the central argument of the project: MLB salaries are influenced by both player performance and labor-market structure, but the value placed on performance depends heavily on where the player is within that labor market.
+
+```{r}
+###############################################################
+# Interaction Effects
+###############################################################
+
+
+#-----------------------------------------------------------
+# Model 1: Contract Regime × WAR Interaction
+#-----------------------------------------------------------
+
+
+salary_int_contract_war <- lm(
+  log_salary ~ Contract_Regime * WAR +
+    Service_Time +
+    Age +
+    xwOBA +
+    wRC_plus +
+    financial_tier +
+    Position,
+  data = hitters
+)
+
+
+summary(salary_int_contract_war)
+
+
+###############################################################
+# Confidence Intervals
+##############################################################
+
+
+confint(salary_int_contract_war)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+
+anova(salary_int_contract_war)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_int_contract_war)$r.squared
+
+summary(salary_int_contract_war)$adj.r.squared
+
+summary(salary_int_contract_war)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_salary <- predict(salary_int_contract_war)
+
+rmse <- sqrt(mean(
+  (hitters$log_salary - predicted_salary)^2
+))
+
+rmse
+
+mae <- mean(
+  abs(hitters$log_salary - predicted_salary)
+)
+
+mae
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_int_contract_war)
+
+par(mfrow = c(1,1))
+
+
+#-----------------------------------------------------------
+# Actual vs Predicted Log Salary
+#-----------------------------------------------------------
+
+plot(
+  hitters$log_salary,
+  predicted_salary,
+  main = "Actual vs Predicted Log(Salary)",
+  xlab = "Actual Log(Salary)",
+  ylab = "Predicted Log(Salary)",
+  pch = 16
+)
+
+abline(0, 1, lwd = 2)
+
+
+
+#-----------------------------------------------------------
+# Model 2: Contract Regime × xwOBA Interaction
+#-----------------------------------------------------------
+
+
+salary_int_contract_xwOBA <- lm(
+  log_salary ~ Contract_Regime * xwOBA +
+    Service_Time +
+    Age +
+    WAR +
+    wRC_plus +
+    financial_tier +
+    Position,
+  data = hitters
+)
+
+
+summary(salary_int_contract_xwOBA)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(salary_int_contract_xwOBA)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+anova(salary_int_contract_xwOBA)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_int_contract_xwOBA)$r.squared
+
+summary(salary_int_contract_xwOBA)$adj.r.squared
+
+summary(salary_int_contract_xwOBA)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_salary <- predict(salary_int_contract_xwOBA)
+
+rmse <- sqrt(mean(
+  (hitters$log_salary - predicted_salary)^2
+))
+
+rmse
+
+mae <- mean(
+  abs(hitters$log_salary - predicted_salary)
+)
+
+mae
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_int_contract_xwOBA)
+
+par(mfrow = c(1,1))
+
+
+#-----------------------------------------------------------
+# Actual vs Predicted Log Salary
+#-----------------------------------------------------------
+
+plot(
+  hitters$log_salary,
+  predicted_salary,
+  main = "Actual vs Predicted Log(Salary)",
+  xlab = "Actual Log(Salary)",
+  ylab = "Predicted Log(Salary)",
+  pch = 16
+)
+
+abline(0, 1, lwd = 2)
+
+
+
+#-----------------------------------------------------------
+# Model 3: Service Time × WAR Interaction
+#-----------------------------------------------------------
+
+
+salary_int_service_war <- lm(
+  log_salary ~ Service_Time * WAR +
+    Contract_Regime +
+    Age +
+    xwOBA +
+    wRC_plus +
+    financial_tier +
+    Position,
+  data = hitters
+)
+
+# Display regression results
+
+summary(salary_int_service_war)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(salary_int_service_war)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+anova(salary_int_service_war)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_int_service_war)$r.squared
+
+summary(salary_int_service_war)$adj.r.squared
+
+summary(salary_int_service_war)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_salary <- predict(salary_int_service_war)
+
+rmse <- sqrt(mean(
+  (hitters$log_salary - predicted_salary)^2
+))
+
+rmse
+
+mae <- mean(
+  abs(hitters$log_salary - predicted_salary)
+)
+
+mae
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_int_service_war)
+
+par(mfrow = c(1,1))
+
+
+#-----------------------------------------------------------
+# Actual vs Predicted Log Salary
+#-----------------------------------------------------------
+
+plot(
+  hitters$log_salary,
+  predicted_salary,
+  main = "Actual vs Predicted Log(Salary)",
+  xlab = "Actual Log(Salary)",
+  ylab = "Predicted Log(Salary)",
+  pch = 16
+)
+
+abline(0, 1, lwd = 2)
+
+
+
+#-----------------------------------------------------------
+# Model 4: Financial Tier × WAR Interaction
+#-----------------------------------------------------------
+
+
+salary_int_financial_war <- lm(
+  log_salary ~ financial_tier * WAR +
+    Contract_Regime +
+    Service_Time +
+    Age +
+    xwOBA +
+    wRC_plus +
+    Position,
+  data = hitters
+)
+
+
+summary(salary_int_financial_war)
+
+
+###############################################################
+# Confidence Intervals
+###############################################################
+
+confint(salary_int_financial_war)
+
+
+###############################################################
+# ANOVA Table
+###############################################################
+
+anova(salary_int_financial_war)
+
+
+###############################################################
+# Model Performance
+###############################################################
+
+summary(salary_int_financial_war)$r.squared
+
+summary(salary_int_financial_war)$adj.r.squared
+
+summary(salary_int_financial_war)$sigma
+
+
+###############################################################
+# Prediction Accuracy
+###############################################################
+
+predicted_salary <- predict(salary_int_financial_war)
+
+rmse <- sqrt(mean(
+  (hitters$log_salary - predicted_salary)^2
+))
+
+rmse
+
+mae <- mean(
+  abs(hitters$log_salary - predicted_salary)
+)
+
+mae
+
+
+###############################################################
+# Diagnostic Plots
+###############################################################
+
+par(mfrow = c(2,2))
+
+plot(salary_int_financial_war)
+
+par(mfrow = c(1,1))
+
+
+#-----------------------------------------------------------
+# Actual vs Predicted Log Salary
+#-----------------------------------------------------------
+
+plot(
+  hitters$log_salary,
+  predicted_salary,
+  main = "Actual vs Predicted Log(Salary)",
+  xlab = "Actual Log(Salary)",
+  ylab = "Predicted Log(Salary)",
+  pch = 16
+)
+
+abline(0, 1, lwd = 2)
+
+
+
+###############################################################
+# Compare Interaction Models
+###############################################################
+
+
+interaction_salary_results <- data.frame(
+
+  Model = c(
+    "Contract Regime x WAR",
+    "Contract Regime x xwOBA",
+    "Service Time x WAR",
+    "Financial Tier x WAR"
+  ),
+
+  R_Squared = c(
+    summary(salary_int_contract_war)$r.squared,
+    summary(salary_int_contract_xwOBA)$r.squared,
+    summary(salary_int_service_war)$r.squared,
+    summary(salary_int_financial_war)$r.squared
+  ),
+
+  Adjusted_R_Squared = c(
+    summary(salary_int_contract_war)$adj.r.squared,
+    summary(salary_int_contract_xwOBA)$adj.r.squared,
+    summary(salary_int_service_war)$adj.r.squared,
+    summary(salary_int_financial_war)$adj.r.squared
+  ),
+
+  RSE = c(
+    summary(salary_int_contract_war)$sigma,
+    summary(salary_int_contract_xwOBA)$sigma,
+    summary(salary_int_service_war)$sigma,
+    summary(salary_int_financial_war)$sigma
+  ),
+
+  RMSE = c(
+    sqrt(mean(
+      (hitters$log_salary -
+       predict(salary_int_contract_war))^2
+    )),
+
+    sqrt(mean(
+      (hitters$log_salary -
+       predict(salary_int_contract_xwOBA))^2
+    )),
+
+    sqrt(mean(
+      (hitters$log_salary -
+       predict(salary_int_service_war))^2
+    )),
+
+    sqrt(mean(
+      (hitters$log_salary -
+       predict(salary_int_financial_war))^2
+    ))
+  ),
+
+  MAE = c(
+    mean(abs(
+      hitters$log_salary -
+      predict(salary_int_contract_war)
+    )),
+
+    mean(abs(
+      hitters$log_salary -
+      predict(salary_int_contract_xwOBA)
+    )),
+
+    mean(abs(
+      hitters$log_salary -
+      predict(salary_int_service_war)
+    )),
+
+    mean(abs(
+      hitters$log_salary -
+      predict(salary_int_financial_war)
+    ))
+  )
+)
+
+interaction_salary_results
+
+
+
+###############################################################
+# Compare Interaction Models Using AIC and BIC
+###############################################################
+
+AIC(
+  salary_int_contract_war,
+  salary_int_contract_xwOBA,
+  salary_int_service_war,
+  salary_int_financial_war
+)
+
+BIC(
+  salary_int_contract_war,
+  salary_int_contract_xwOBA,
+  salary_int_service_war,
+  salary_int_financial_war
+)
+```
+
+## Diagnostics
+
+The final salary model was evaluated using residual plots, a Q-Q plot, a residual histogram, Cook’s distance, leverage values, and standardized residuals. These diagnostics were used to assess whether the model assumptions were reasonable and whether individual observations had an unusually large influence on the fitted model.
+
+The Residuals vs. Fitted Values plot shows that the residuals are centered around zero overall, but the spread is not completely uniform across the fitted values. There are also noticeable groupings of observations, particularly between the lower fitted salary values and the larger group of observations at higher fitted values. This suggests that the model captures much of the systematic variation in salary, but some structure remains in the residuals. The presence of several observations with relatively large negative residuals also indicates that the model substantially overpredicts salary for some players.
+
+The Q-Q plot shows a clear departure from the straight reference line, particularly in both tails. This indicates that the residuals are not perfectly normally distributed. The departure is especially noticeable in the lower tail, where several observations have unusually large negative standardized residuals. The histogram supports this conclusion: although most residuals are concentrated around zero, the distribution has relatively long tails. Therefore, the normality assumption is not fully satisfied.
+
+The residual summary also shows the extent of these unusual observations. Residuals range from -3.4560 to 2.9061, with a median of -0.0538. Most observations are much closer to zero, but the large minimum and maximum values indicate that there are several players whose actual salaries differ substantially from the values predicted by the model.
+
+The Cook’s distance results indicate that several observations have noticeably greater influence on the model than the majority of observations. The largest Cook’s distance is approximately 0.0326 for observation 294, followed by observations 340 and 464 with values of approximately 0.0288 and 0.0283. Using the common \(4/n\) screening guideline, where \(n=1377\), the reference level is approximately 0.0029, meaning several observations exceed this level. However, the Cook’s distances are still relatively spread out rather than being dominated by one extremely influential observation. Therefore, there is evidence of influential observations, but there is not one single observation that appears to completely determine the model.
+
+The observations with the largest Cook’s distances include several players with unusual combinations of salary, service time, and career characteristics. For example, observation 294 corresponds to Jose Reyes in 2017, who had more than 13 years of service time but a relatively low salary. This helps explain why this observation has both a large residual and relatively high influence on the fitted model. Other influential observations include players such as Yuli Gurriel, Masataka Yoshida, David Ortiz, and Seiya Suzuki, which represent very different points in the salary and service-time distributions.
+
+The leverage values show that some observations have unusually large values of the predictor variables compared with the rest of the sample. The largest leverage value is approximately 0.0590 for observation 289, followed by observations 144 and 290 with leverage values of approximately 0.0583 and 0.0536. Since the average leverage is approximately \(17/1377 \approx 0.0124\), these observations have substantially greater leverage than an average observation. These high-leverage observations are largely experienced veterans with very high service time and age, such as Carlos Beltrán, Adrián Beltré, and Albert Pujols. Their unusual career characteristics give them considerable influence over the fitted regression surface even when their residuals are not especially large.
+
+The standardized residuals provide additional evidence of unusual observations. The largest absolute standardized residual is approximately 5.53 for observation 294, followed by observations 75, 1121, 1103, and 1199, all of which have absolute standardized residuals greater than approximately 4. These values indicate that several players have salaries that are substantially different from what the model predicts based on their observed characteristics. Importantly, some of these observations are not necessarily high-leverage observations, meaning that unusual salaries themselves can create large residuals even when the predictor values are not particularly extreme.
+
+Overall, the diagnostic results suggest that the final salary model captures a substantial amount of the variation in MLB salaries, with an R² of 79.11% and an adjusted R² of 78.86%, but the model does not satisfy every classical regression assumption perfectly. The residuals show evidence of non-normality, several observations have relatively large residuals, and there are both high-leverage and influential observations. These issues are not surprising given the nature of MLB salary data, where individual contracts can differ substantially because of factors that are difficult to capture using player statistics alone. The diagnostics therefore suggest that the model is useful for explaining salary variation, but its predictions should be interpreted with some caution, particularly for players with unusual career histories or contract situations.
+
+```{r}
+############################################################
+# Final Salary Model Diagnostics
+############################################################
+
+
+#-----------------------------------------------------------
+# Final Salary Model
+#-----------------------------------------------------------
+
+
+salary_full_model <- lm(
+  log_salary ~ Service_Time * WAR +
+    Contract_Regime +
+    Age +
+    xwOBA +
+    wRC_plus +
+    financial_tier +
+    Position,
+  data = hitters
+)
+
+
+summary(salary_full_model)
+
+
+#-----------------------------------------------------------
+# 95% Confidence Intervals
+#-----------------------------------------------------------
+
+
+confint(salary_full_model)
+
+
+#-----------------------------------------------------------
+# Overall Model Performance
+#-----------------------------------------------------------
+
+
+summary(salary_full_model)$r.squared
+
+
+summary(salary_full_model)$adj.r.squared
+
+
+summary(salary_full_model)$sigma
+
+
+# RMSE
+
+sqrt(mean(residuals(salary_full_model)^2))
+
+
+# MAE
+
+mean(abs(residuals(salary_full_model)))
+
+
+#-----------------------------------------------------------
+# Standard Diagnostic Plots
+#-----------------------------------------------------------
+
+
+par(mfrow = c(2,2))
+
+plot(salary_full_model)
+
+par(mfrow = c(1,1))
+
+
+#-----------------------------------------------------------
+# Residual Histogram
+#-----------------------------------------------------------
+
+
+hist(residuals(salary_full_model),
+     main = "Histogram of Model Residuals",
+     xlab = "Residuals")
+
+
+#-----------------------------------------------------------
+# Summary of Residuals
+#-----------------------------------------------------------
+
+
+summary(residuals(salary_full_model))
+
+
+#-----------------------------------------------------------
+# Largest Positive Residuals
+#-----------------------------------------------------------
+
+
+positive_residuals <- order(
+  residuals(salary_full_model),
+  decreasing = TRUE
+)
+
+head(
+  hitters[positive_residuals, ],
+  10
+)
+
+
+#-----------------------------------------------------------
+# Largest Negative Residuals
+#-----------------------------------------------------------
+
+
+negative_residuals <- order(
+  residuals(salary_full_model)
+)
+
+head(
+  hitters[negative_residuals, ],
+  10
+)
+
+
+#-----------------------------------------------------------
+# Cook's Distance
+#-----------------------------------------------------------
+
+
+cook_distance <- cooks.distance(salary_full_model)
+
+plot(
+  cook_distance,
+  type = "h",
+  main = "Cook's Distance",
+  xlab = "Observation",
+  ylab = "Cook's Distance"
+)
+
+
+
+summary(cook_distance)
+
+
+
+
+top_cook <- order(
+  cook_distance,
+  decreasing = TRUE
+)[1:10]
+
+top_cook
+
+
+
+hitters[top_cook, ]
+
+
+#-----------------------------------------------------------
+# Leverage Values
+#-----------------------------------------------------------
+
+
+leverage <- hatvalues(salary_full_model)
+
+plot(
+  leverage,
+  type = "h",
+  main = "Leverage Values",
+  xlab = "Observation",
+  ylab = "Leverage"
+)
+
+
+
+summary(leverage)
+
+
+
+top_leverage <- order(
+  leverage,
+  decreasing = TRUE
+)[1:10]
+
+top_leverage
+
+
+
+hitters[top_leverage, ]
+
+
+#-----------------------------------------------------------
+# Standardized Residuals
+#-----------------------------------------------------------
+
+
+standardized_residuals <- rstandard(salary_full_model)
+
+
+summary(standardized_residuals)
+
+
+top_standardized <- order(
+  abs(standardized_residuals),
+  decreasing = TRUE
+)[1:10]
+
+top_standardized
+
+
+hitters[top_standardized, ]
+
+
+#-----------------------------------------------------------
+# Residuals vs Fitted Values
+#-----------------------------------------------------------
+
+
+plot(
+  fitted(salary_full_model),
+  residuals(salary_full_model),
+  main = "Residuals vs Fitted Values",
+  xlab = "Fitted Values",
+  ylab = "Residuals"
+)
+
+abline(h = 0,
+       lty = 2)
+
+
+#-----------------------------------------------------------
+# Q-Q Plot
+#-----------------------------------------------------------
+
+qqnorm(
+  residuals(salary_full_model),
+  main = "Normal Q-Q Plot"
+)
+
+qqline(
+  residuals(salary_full_model)
+)
+
+#-----------------------------------------------------------
+# Residual vs Leverage Plot
+#-----------------------------------------------------------
+
+
+plot(
+  salary_full_model,
+  which = 5
+)
+
+
+#-----------------------------------------------------------
+# Summary of Potentially Influential Observations
+#-----------------------------------------------------------
+
+
+diagnostic_summary <- data.frame(
+  Observation = 1:nrow(hitters),
+  Cook_Distance = cook_distance,
+  Leverage = leverage,
+  Standardized_Residual = standardized_residuals
+)
+
+
+
+head(
+  diagnostic_summary[
+    order(diagnostic_summary$Cook_Distance,
+          decreasing = TRUE),
+  ],
+  10
+)
+
+
+
+head(
+  diagnostic_summary[
+    order(diagnostic_summary$Leverage,
+          decreasing = TRUE),
+  ],
+  10
+)
+
+
+
+head(
+  diagnostic_summary[
+    order(abs(diagnostic_summary$Standardized_Residual),
+          decreasing = TRUE),
+  ],
+  10
+)
+```
+
+
+## Selection Bias
+
+Because the analysis is restricted to qualified hitters, selection bias is a potential limitation of the salary models. Players with fewer plate appearances are more likely to be excluded from the analysis, meaning that the final sample may not represent all MLB hitters. To examine whether the selection variable is related to salary, the relationship between plate appearances (PA) and log salary was evaluated.
+
+The qualified hitters in the dataset had between 502 and 753 plate appearances, with a median of 604 and a mean of 605.4. The plot of log salary against PA shows a slight positive relationship, although there is substantial variation in salary across all levels of playing time. The regression model found that PA was significantly associated with log salary (β = 0.003586, p < 0.001), with a 95% confidence interval from 0.002410 to 0.004762. This indicates that players with more plate appearances tended to have higher salaries.
+
+However, the relationship was relatively weak. The model had an R² of 0.0254 and an adjusted R² of 0.0247, meaning that PA alone explained only about 2.5% of the variation in log salary. The correlation between PA and log salary was also weak at 0.159. The RMSE was 1.353 and the MAE was 1.191, further showing that plate appearances alone provide limited information about individual salaries.
+
+These results suggest that playing time is related to salary, but it is not a major determinant of salary by itself. Because the dataset was already restricted to qualified hitters, the analysis cannot directly compare qualified and non-qualified players to determine the full extent of selection bias. Therefore, selection bias should be considered a potential limitation of the study rather than evidence that the salary models are necessarily biased. More importantly, the results reinforce the findings from the previous salary models: salary is influenced by a combination of labor-market factors, player performance, and other characteristics rather than by playing time alone.
+
+```{r}
+#-----------------------------------------------------------
+# Selection Bias
+#-----------------------------------------------------------
+
+#-----------------------------------------------------------
+# Examine Plate Appearances
+#-----------------------------------------------------------
+
+summary(hitters$PA)
+
+#-----------------------------------------------------------
+# Plot Salary vs Plate Appearances
+#-----------------------------------------------------------
+
+plot(hitters$PA,
+     hitters$log_salary,
+     main = "Log Salary vs Plate Appearances",
+     xlab = "Plate Appearances",
+     ylab = "Log(Salary)")
+
+abline(
+  lm(log_salary ~ PA, data = hitters),
+  lty = 2
+)
+
+
+#-----------------------------------------------------------
+# Regression: Plate Appearances and Salary
+#-----------------------------------------------------------
+
+
+pa_salary_model <- lm(
+  log_salary ~ PA,
+  data = hitters
+)
+
+summary(pa_salary_model)
+
+
+#-----------------------------------------------------------
+# Confidence Interval for PA
+#-----------------------------------------------------------
+
+
+confint(pa_salary_model)
+
+
+#-----------------------------------------------------------
+# Model Performance
+#-----------------------------------------------------------
+
+
+summary(pa_salary_model)$r.squared
+
+summary(pa_salary_model)$adj.r.squared
+
+summary(pa_salary_model)$sigma
+
+sqrt(mean(residuals(pa_salary_model)^2))
+
+mean(abs(residuals(pa_salary_model)))
+
+
+#-----------------------------------------------------------
+# Correlation Between PA and Log Salary
+#-----------------------------------------------------------
+
+
+cor(
+  hitters$PA,
+  hitters$log_salary,
+  use = "complete.obs"
+)
+```
+
+## Conclusion
+
+The goal of this analysis was to determine what factors are most strongly associated with MLB player salaries and whether salaries are driven primarily by player performance or labor-market structure. The results suggest that both play a role, but labor-market factors are substantially more important than individual performance measures alone. The simple salary models showed that individual statistics such as WAR, RBI, wRC+, and xwOBA were statistically significant predictors of salary, but each explained only a relatively small amount of the overall variation in salaries. Among the performance measures, xwOBA provided the strongest simple Statcast relationship, but its R² of approximately 0.074 still showed that performance alone could not explain most salary differences.
+
+In contrast, service time and contract status had much stronger relationships with salary. Service time alone explained approximately 60.4% of the variation in log salary, while contract regime explained approximately 75.0%. Players in arbitration and free agency had substantially higher salaries than pre-arbitration players, demonstrating the importance of the MLB labor-market structure. Financial tier had a much smaller effect by itself, but it remained statistically significant after controlling for contract regime, suggesting that market size may contribute to salary differences without being as important as contract status.
+
+The multiple regression models further demonstrated that salary is determined by several factors simultaneously. The final model included Service Time, WAR, Contract Regime, Age, xwOBA, wRC+, financial tier, Position, and the interaction between Service Time and WAR. The Service Time × WAR interaction was particularly important because it showed that the relationship between player performance and salary changes as players progress through their careers. The model explained approximately 79.1% of the variation in log salary, with an adjusted R² of 0.7886, an RMSE of 0.6264, and an MAE of 0.4538. Among the interaction models examined, this model provided the strongest overall fit and had the lowest AIC and BIC.
+
+The diagnostics also showed that the final model has limitations. Several observations had large standardized residuals, and some players had relatively high leverage or Cook's distance. This indicates that certain observations can have a meaningful influence on the fitted model and that the model does not predict every player's salary equally well. The actual-versus-predicted results also showed that the model captures the general structure of salaries but has difficulty predicting some unusually high or low salaries. In addition, the selection-bias analysis found a statistically significant relationship between plate appearances and salary, although PA explained only about 2.5% of salary variation. Since the analysis was restricted to qualified hitters, selection bias remains a potential limitation because non-qualified players were not available for direct comparison.
+
+Overall, the findings support the conclusion that MLB salaries are influenced by both player performance and labor-market structure, but labor-market structure appears to be the dominant factor. Performance matters, particularly when considered alongside service time and other player characteristics, but a player's salary cannot be explained by statistics such as WAR alone. Contract regime and service time play a much larger role because they determine when players gain greater negotiating power and access to higher levels of compensation. This suggests that MLB salaries reflect not only how well a player performs on the field, but also where that player is in the labor market and career progression.
