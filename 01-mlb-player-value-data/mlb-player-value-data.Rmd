@@ -1,0 +1,786 @@
+---
+title: "mlb-player-value-data"
+author: "Jacob Rouette"
+date: "2026-11-06"
+output:
+  word_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction to Baseball Analytics Project
+
+This study utilizes a player-level dataset constructed from multiple publicly available baseball data sources to create a comprehensive collection of offensive statistics, advanced sabermetric measures, Statcast metrics, player characteristics, and salary information. Combining these sources allows for the examination of both on-field performance and player compensation within a single analytical framework.
+
+The majority of offensive and Statcast variables were obtained from Baseball Savant, which provides detailed player-tracking and batted-ball information generated through Major League Baseball's Statcast system. Additional advanced performance metrics, including FanGraphs Wins Above Replacement (fWAR), Offensive Runs Above Average (Off), Baserunning Runs (BsR), Defensive Runs (Def), and Weighted Runs Created Plus (wRC+), were obtained from FanGraphs. Basic player information, including position, batting handedness, service time, and team affiliation, was collected from Baseball Reference, while base salary information was obtained from Spotrac.
+
+The dataset focuses exclusively on the Statcast era, beginning in 2015 and extending through 2025. The 2020 season was excluded from the analysis because the COVID-19 pandemic resulted in a shortened 60-game schedule, producing substantially different playing-time distributions and statistical environments compared with full Major League seasons. Excluding the 2020 season improves comparability across observations and reduces potential distortions in the analysis.
+
+The dataset was restricted to qualified hitters in each season to improve the reliability and comparability of offensive and Statcast measurements. Limiting the sample to qualified players ensures that each observation represents a player who accumulated sufficient playing time for performance statistics to be more stable and comparable across seasons. This filtering also reduces the influence of small-sample performances on the analysis.
+
+After the data from the different sources were combined and the qualification criteria were applied, the resulting dataset consisted of player-season observations for qualified Major League Baseball hitters throughout the Statcast era. The dataset provides the foundation for the subsequent exploratory analysis and modeling of offensive performance, player value, and player compensation.
+
+## Variable Selection
+
+The final dataset contains variables that capture multiple dimensions of player performance, player characteristics, and market valuation. For organizational purposes, the variables were divided into several categories based on the type of information they provide.
+
+Traditional Offensive Statistics
+
+Traditional offensive statistics represent commonly used measures of offensive production and provide a baseline for evaluating player performance. These variables include plate appearances (PA), home runs (HR), runs batted in (RBI), runs scored (R), stolen bases (SB), batting average (BA), strikeout percentage (K%), walk percentage (BB%), slugging percentage (SLG), on-base plus slugging (OPS), and batting average on balls in play (BABIP).
+
+These variables describe observed offensive production and provide a foundation for comparing traditional measures with more advanced performance statistics.
+
+Advanced Sabermetric Statistics
+
+Advanced sabermetric statistics provide additional measures of offensive, defensive, baserunning, and overall player value. These variables include isolated power (ISO), weighted on-base average (wOBA), weighted runs created plus (wRC+), Wins Above Replacement (WAR), Offensive Runs Above Average (Off), Baserunning Runs (BsR), and Defensive Runs (Def).
+
+These measures provide broader assessments of player contributions than individual traditional statistics and allow different aspects of overall player value to be represented within the dataset.
+
+Statcast Metrics
+
+Statcast metrics provide information about underlying performance and quality of contact. These variables include expected batting average (xBA), expected slugging percentage (xSLG), expected weighted on-base average (xwOBA), expected isolated power (xISO), average exit velocity (EV), average launch angle, sweet spot percentage, barrel percentage, hard-hit percentage, whiff percentage, swing percentage, ground-ball percentage, line-drive percentage, and fly-ball percentage.
+
+These variables provide information about the characteristics of a player's batted balls and swing behavior, complementing the observed outcomes captured by traditional and sabermetric statistics.
+
+Player and Economic Variables
+
+The dataset also includes variables describing player characteristics, team information, and compensation. These variables include age, service time, position, batting handedness, team affiliation, financial tier, and base salary.
+
+These variables provide information about player characteristics and the economic environment surrounding each player-season observation. Base salary and financial tier capture compensation and organizational context, while age and service time describe aspects of a player's career stage.
+
+Categorical Profile Variables
+
+Two categorical variables were included to represent player tendencies and organizational characteristics.
+
+The first is hitter profile, which classifies players as pull hitters, balanced hitters, or opposite-field hitters based on their batted-ball tendencies. This variable provides a categorical representation of offensive approach.
+
+The second is financial tier, which classifies teams into large-market, mid-market, and small-market organizations. This variable represents differences in the financial environment of the player's organization and provides an additional measure of team-level economic context.
+
+Together, these variable categories provide the foundation for the final dataset and allow player performance, player characteristics, and economic factors to be examined within the same analytical framework.
+
+## Data Cleaning
+
+Prior to analysis, several data cleaning and validation procedures were performed to improve the consistency and reliability of the final dataset.
+
+The first step involved combining information from Baseball Savant, FanGraphs, Baseball Reference, and Spotrac into a unified player-season dataset. Player identifiers and season information were used to align observations across the different data sources and ensure that information from each source corresponded to the correct player and season.
+
+Following the data integration process, the dataset was reviewed for duplicate player-season observations. Duplicate records were identified and removed when necessary so that each observation represented a unique player-season combination.
+
+The data were also reviewed for consistency across sources. Player names, season information, team affiliations, positions, and other player-level characteristics were checked to ensure that information from the different sources was properly aligned. This step was particularly important because the final dataset combines information from multiple independent databases.
+
+Categorical variables were standardized during the preparation process to ensure consistent labeling across observations. These variables include position, batting handedness, team affiliation, hitter profile, and financial tier. Consistent category labels were important for accurately summarizing and analyzing these variables in the completed dataset.
+
+Finally, the dataset was reviewed for missing values across the included variables. Particular attention was given to Statcast metrics and salary information because missing observations in these variables could affect later analysis. The extent of missingness was retained for further examination during the exploratory data analysis.
+
+## Sample Filtering
+
+A primary objective of this study is to examine relationships among offensive performance, player value, and player compensation. Because many baseball statistics can be unstable when measured over small samples, the dataset was restricted to qualified hitters in each season to improve data quality and comparability.
+
+Qualification standards require players to accumulate substantial playing time during the season, providing a meaningful sample size for evaluating offensive and Statcast performance. Restricting the dataset to qualified hitters reduces the influence of small-sample performances and makes player-season observations more comparable across years.
+
+This filtering approach also improves the stability of rate-based statistics such as batting average, walk percentage, strikeout percentage, wOBA, and xwOBA. By focusing on players who accumulated sufficient playing time, the dataset places greater emphasis on sustained full-season performance rather than results from limited opportunities.
+
+The final sample therefore consists only of qualified hitters for each included season. Because the qualification standard already establishes a playing-time threshold, no additional plate appearance requirement was applied.
+
+## Variable Transformations
+
+Log Salary Transformation
+
+Player salaries in Major League Baseball exhibit substantial positive skewness. While many players earn salaries closer to the league minimum, a relatively small number of players earn salaries in the tens of millions of dollars per season. This creates a highly right-skewed salary distribution and increases the influence of extremely high salary observations.
+
+To address this issue, a natural logarithm transformation of base salary was created for use in salary analysis. The transformed variable, log_salary, reduces the influence of extreme salary values and produces a more balanced distribution for regression analysis. The transformation also allows salary relationships to be interpreted in terms of proportional changes rather than changes in absolute dollar amounts.
+
+Both raw base salary and log-transformed salary are retained in the dataset. Raw salary remains useful for describing actual player compensation and presenting salary results in dollar terms, while log_salary is used primarily in regression models where the transformed response provides a more suitable representation of the salary distribution. The distributions of both variables will be examined further during the exploratory data analysis.
+
+Standardization of Predictor Variables
+
+The variables included in the dataset are measured on different scales. For example, exit velocity is measured in miles per hour, age is measured in years, and variables such as barrel percentage and hard-hit percentage are expressed as percentages. These differences in scale can affect certain modeling procedures and make coefficient magnitudes difficult to compare directly.
+
+Standardization will therefore be applied when appropriate during the advanced modeling stage. Standardization transforms a variable so that it has a mean of zero and a standard deviation of one, placing predictors on a common scale.
+
+This process is particularly important for Ridge Regression and LASSO Regression because both methods are sensitive to differences in predictor scale. Standardizing the predictors ensures that the penalty applied to each coefficient is not disproportionately influenced by the original measurement units.
+
+Standardization is treated as a modeling step rather than a permanent transformation of the original dataset. The original predictor values are retained so that descriptive statistics and other analyses can be interpreted using their original units. When standardized predictors are required for advanced regression procedures, the transformation will be applied as part of the modeling process.
+
+Together, the log salary transformation and the planned standardization of predictors prepare the data for the statistical modeling procedures used throughout the remainder of the project while preserving the original variables for interpretation and exploratory analysis.
+
+# Introduction to Exploratory Data Analysis
+
+With the dataset constructed and prepared, the next step is to examine its overall structure and characteristics through Exploratory Data Analysis (EDA). The purpose of this section is to understand the completed player-season dataset before applying statistical models. This includes examining variable distributions, identifying unusual observations, evaluating missing values, and investigating relationships among player performance, player characteristics, and salary.
+
+Because the project examines both player value and player compensation, the exploratory analysis considers how different groups of variables relate to fWAR and base salary. Traditional offensive statistics, advanced sabermetric measures, Statcast metrics, player characteristics, and organizational factors are examined to identify important patterns within the data. Examining these relationships provides context for understanding how the variables behave individually and in relation to one another.
+
+The analysis also provides an additional assessment of the quality and characteristics of the completed dataset. Summary statistics and visualizations are used to evaluate the distributions of key variables, identify potential outliers, examine missing values, and assess relationships among predictors. Particular attention is given to the distributions of base salary and fWAR, as well as the relationships among traditional offensive statistics, advanced sabermetrics, and Statcast measures.
+
+More specifically, the objectives of this section are to understand the structure of the completed dataset, evaluate data quality, examine the distributions of important variables, identify unusual observations, investigate relationships among variables, and identify patterns that are relevant to the statistical analyses that follow. The findings from this exploratory analysis provide the descriptive foundation for the regression and other statistical models developed in the remainder of the project.
+
+
+```{r} 
+data_path <- Sys.getenv("STATCAST_DATA_PATH")
+
+hitters <- read.csv(file.path(data_path, "FullStatcastData.csv"))
+```
+## Data Structure And Data Quality
+
+The completed dataset contains 1,377 player-season observations and 50 variables. Each observation represents a qualified Major League Baseball hitter in a single season. The dataset covers the 2015 through 2025 seasons, excluding 2020 due to the shortened season discussed in the data preparation section. The number of observations varies somewhat across seasons, ranging from 129 observations in 2024 to 146 observations in 2016.
+
+The dataset contains a combination of player identification variables, traditional offensive statistics, advanced sabermetric measures, Statcast metrics, player characteristics, salary information, and categorical variables. Of the 50 variables, 33 are numeric, 10 are integer, 6 are character variables, and 1 is a factor variable. The dataset also contains the engineered log_salary and Contract_Regime variables described during the data preparation process.
+
+Several basic data-quality checks were performed on the completed dataset. No missing values were identified across the 50 variables, indicating that the final dataset is complete for the included observations. In addition, no duplicate player-season combinations were identified using MLBAMID and Year, confirming that each player-season is represented only once.
+
+The categorical variables also provide coverage across the major player and organizational classifications used throughout the project. The dataset contains 465 outfield observations, 208 shortstop observations, 199 first basemen, 192 third basemen, 177 second basemen, 71 designated hitters, and 65 catchers. Financial tier consists of 480 Big Market, 473 Mid Market, and 424 Small Market observations. Hitter profile consists of 1,083 Balanced, 148 Opposite-field, and 146 Pull hitters.
+
+Overall, the structural and data-quality checks indicate that the completed dataset is consistent and complete for the intended analysis. With the dataset structure established, the next sections examine the distributions and characteristics of the variables in greater detail.
+
+```{r}
+library(dplyr)
+
+############################################################
+# 1. Examine Overall Dataset Structure
+############################################################
+
+dim(hitters)
+
+nrow(hitters)
+
+ncol(hitters)
+
+names(hitters)
+
+str(hitters)
+
+head(hitters)
+
+tail(hitters)
+
+
+############################################################
+# 2. Examine Variable Types
+############################################################
+
+sapply(hitters, class)
+
+table(sapply(hitters, class))
+
+
+############################################################
+# 3. Check for Missing Values
+############################################################
+
+sum(is.na(hitters))
+
+missing_values <- colSums(is.na(hitters))
+
+missing_values[missing_values > 0]
+
+missing_percent <- round(
+  colSums(is.na(hitters)) / nrow(hitters) * 100,
+  2
+)
+
+missing_table <- data.frame(
+  Variable = names(missing_percent),
+  Missing = missing_values,
+  Missing_Percent = missing_percent
+)
+
+missing_table <- missing_table %>%
+  filter(Missing > 0)
+
+missing_table
+
+
+############################################################
+# 4. Basic Data Quality Checks
+############################################################
+
+sum(duplicated(hitters[, c("MLBAMID", "Year")]))
+
+range(hitters$Year, na.rm = TRUE)
+
+table(hitters$Year)
+
+table(hitters$Position)
+
+table(hitters$financial_tier)
+
+table(hitters$hitter_profile)
+
+
+############################################################
+# 5. Verify Key Numeric Variables
+############################################################
+
+sum(hitters$Base_Salary < 0, na.rm = TRUE)
+
+sum(is.na(hitters$WAR))
+
+sum(is.na(hitters$Base_Salary))
+
+sum(is.na(hitters$MLBAMID))
+
+sum(is.na(hitters$Year))
+```
+
+## Summary Statistics
+
+The summary statistics provide an overview of the typical player characteristics, offensive performance, advanced metrics, Statcast measurements, and salary levels within the dataset. The average player in the sample was 28.30 years old with 4.58 years of service time and 605.45 plate appearances. The median values were similar, with a median age of 28 years, 4.05 years of service time, and 604 plate appearances. This indicates that the sample is centered around established Major League players with substantial playing time in each season.
+
+The traditional offensive statistics show that the average player recorded 21.84 home runs, 75.22 RBI, 78.35 runs, and 10.03 stolen bases. The median values were 21 home runs, 74 RBI, 76 runs, and 6 stolen bases. The difference between the mean and median for stolen bases is particularly noticeable, while the maximum of 73 stolen bases demonstrates that a small number of players recorded substantially more stolen bases than the typical player. Batting average had a mean of .270 and a median of .260, while OPS had a mean of .790 and a median of .780. The average walk rate was 8.84% and the average strikeout rate was 19.89%.
+
+The advanced sabermetric statistics provide additional measures of overall offensive and player value. WAR had a mean of 2.91 and a median of 2.76, with a standard deviation of 1.98. WAR ranged from -2.54 to 11.33, showing that player value varied substantially across the sample. The average wRC+ was 112.54, with a median of 111.16, indicating that the typical player in the sample performed above the league-average offensive baseline represented by a wRC+ of 100. wOBA had a mean of .340, while ISO had a mean of .180. Offensive Runs (Off) had a mean of 10.01, while Baserunning Runs (BsR) had a mean of 0.25 and Defensive Runs (Def) had a mean of -1.56. The relatively large ranges of Off, BsR, and Def demonstrate that player contributions can vary considerably across different components of overall value.
+
+The Statcast variables show relatively concentrated distributions for several measures. Average exit velocity had a mean of 89.31 mph and a median of 89.30 mph, with values ranging from 80.50 to 96.20 mph. Average launch angle was 12.84 degrees, with a median of 13.00 degrees. The average Sweet Spot percentage was 34.12%, while Barrel percentage averaged 8.65% and Hard-Hit percentage averaged 39.53%. These variables also show meaningful variation across players, particularly Hard-Hit percentage, which ranged from 8.50% to 61.90%, and Barrel percentage, which ranged from 0% to 27.60%.
+
+Salary showed substantially greater variation than the performance variables. Mean base salary was approximately $8.23 million, while the median salary was $5.20 million. The standard deviation was approximately $8.69 million, and salaries ranged from $500,000 to $70 million. The fact that the mean salary is considerably higher than the median indicates the presence of a strongly right-skewed salary distribution, with a relatively small number of highly paid players increasing the overall mean. The log-transformed salary had a mean of 15.19 and a median of 15.46, with a standard deviation of 1.37. The smaller difference between the mean and median after transformation indicates that the logarithmic transformation produces a more balanced representation of the salary distribution.
+
+Overall, the summary statistics demonstrate substantial variation across player performance and compensation. Traditional offensive statistics show meaningful differences in production, while advanced metrics such as WAR, wRC+, Off, BsR, and Def capture additional variation in overall player value. The Statcast variables provide information on underlying contact quality and batted-ball characteristics, while salary displays the greatest degree of variation among the variables examined. These results provide a descriptive baseline for the distributional analyses that follow, particularly the more detailed examination of salary and WAR distributions.
+
+```{r}
+############################################################
+# Summary Statistics
+############################################################
+
+options(scipen = 999)
+
+hitters$log_salary <- log(hitters$Base_Salary)
+
+# Select the main quantitative variables for the summary
+summary_data <- hitters %>%
+  select(
+    
+    # Player Characteristics
+    Age,
+    Service_Time,
+    PA,
+    
+    # Traditional Offensive Statistics
+    HR,
+    RBI,
+    R,
+    SB,
+    BA,
+    OPS,
+    BB_Percent,
+    K_Percent,
+    
+    # Advanced Sabermetric Statistics
+    WAR,
+    wRC_plus,
+    wOBA,
+    ISO,
+    Off,
+    BsR,
+    Def,
+    
+    # Statcast Metrics
+    xBA,
+    xSLG,
+    xwOBA,
+    xISO,
+    EV_Avg,
+    LaunchAngle_Avg,
+    SweetSpot_Percent,
+    Barrel_Percent,
+    HardHit_Percent,
+    
+    # Salary
+    Base_Salary,
+    log_salary
+  )
+
+
+############################################################
+# Create Summary Statistics Table
+############################################################
+
+summary_table <- data.frame(
+  
+  Mean = sapply(
+    summary_data,
+    mean,
+    na.rm = TRUE
+  ),
+  
+  Median = sapply(
+    summary_data,
+    median,
+    na.rm = TRUE
+  ),
+  
+  SD = sapply(
+    summary_data,
+    sd,
+    na.rm = TRUE
+  ),
+  
+  Minimum = sapply(
+    summary_data,
+    min,
+    na.rm = TRUE
+  ),
+  
+  Q1 = sapply(
+    summary_data,
+    quantile,
+    probs = 0.25,
+    na.rm = TRUE
+  ),
+  
+  Q3 = sapply(
+    summary_data,
+    quantile,
+    probs = 0.75,
+    na.rm = TRUE
+  ),
+  
+  Maximum = sapply(
+    summary_data,
+    max,
+    na.rm = TRUE
+  )
+)
+
+
+############################################################
+# Round Values for Presentation
+############################################################
+
+summary_table <- summary_table %>%
+  mutate(
+    across(
+      where(is.numeric),
+      round,
+      2
+    )
+  )
+
+
+############################################################
+# Display Summary Statistics
+############################################################
+
+summary_table
+```
+
+## Salary And fWAR Distributions
+
+The distributions of base salary and fWAR provide an initial view of the variation in player compensation and overall player value. Base salary is strongly right-skewed, with a large concentration of observations at the lower end of the distribution and progressively fewer observations as salary increases. The histogram shows that most player-season observations fall below approximately 15 million dollars, while a relatively small number of players have substantially higher salaries. The boxplot also shows the long upper tail of the salary distribution, with several observations extending well above the majority of the sample. This pattern is consistent with the substantial difference between the mean base salary of approximately 8.23 million dollars and the median of 5.20 million dollars observed in the summary statistics.
+
+The log transformation produces a substantially different distribution. Compared with raw salary, the log-transformed salary is more evenly distributed across its range and reduces the influence of the highest salary observations. The transformed distribution still shows some variation in concentration across different salary levels, but the extreme upper tail present in the raw salary distribution is substantially compressed. This demonstrates why log_salary provides a more suitable response variable for many of the salary regression models used later in the project.
+
+The fWAR distribution is considerably more concentrated than the salary distribution. Most observations fall between approximately 0 and 6 fWAR, with the highest concentration occurring around 2 to 4 fWAR. The distribution has a moderate right tail, with a smaller number of player-seasons producing substantially higher fWAR values. There are also observations below zero, representing player-seasons with negative overall value according to the WAR measure. The boxplot similarly shows that most observations are concentrated around the middle of the distribution while a smaller number extend toward both the lower and upper extremes.
+
+Overall, the distributions demonstrate an important difference between player performance and compensation. fWAR is relatively concentrated around the typical player-season, while salary has a much wider and more strongly skewed distribution. The salary plots also demonstrate the usefulness of the logarithmic transformation for reducing the influence of extreme salaries. These distributional patterns provide important context for the regression analyses that follow, particularly the use of log_salary in salary models.
+
+```{r}
+############################################################
+# Salary & fWAR Distributions
+############################################################
+
+hist(
+  hitters$Base_Salary,
+  main = "Distribution of MLB Player Base Salary",
+  xlab = "Base Salary ($)",
+  breaks = 30
+)
+
+hist(
+  hitters$log_salary,
+  main = "Distribution of Log-Transformed Salary",
+  xlab = "Log(Base Salary)",
+  breaks = 30
+)
+
+hist(
+  hitters$WAR,
+  main = "Distribution of fWAR",
+  xlab = "fWAR",
+  breaks = 30
+)
+
+boxplot(
+  hitters$Base_Salary,
+  main = "Base Salary Distribution",
+  ylab = "Base Salary ($)"
+)
+
+boxplot(
+  hitters$WAR,
+  main = "fWAR Distribution",
+  ylab = "fWAR"
+)
+```
+
+## Performance Variable Distributions
+
+The distributions of the selected traditional, advanced, and Statcast performance variables provide a visual overview of how player performance varies across the sample. The traditional offensive statistics generally show concentrated distributions around the typical player-season, although several variables display noticeable right-skewness.
+
+Batting average is centered around approximately .25 to .28, with most observations falling between roughly .20 and .32. The distribution is relatively balanced, with fewer observations at the lower and upper ends. OPS shows a somewhat stronger right tail, with most observations concentrated between approximately .65 and .90 and fewer observations extending above 1.00. Home runs are also right-skewed, with the greatest concentration between approximately 10 and 30 home runs and progressively fewer observations at higher totals. Runs scored follows a similar pattern, with most observations concentrated around 60 to 90 runs and a longer upper tail extending beyond 100 runs.
+
+The advanced sabermetric measures show similar patterns but provide additional information about offensive and overall player performance. The wRC+ distribution is centered slightly above 100, with most observations falling between approximately 80 and 140. The distribution also has a noticeable upper tail extending toward 200, reflecting a smaller number of highly productive offensive seasons. wOBA is concentrated around approximately .30 to .37, with a smaller number of observations extending toward .45. Offensive Runs has a wider distribution, with observations extending from negative values to substantially positive values. Defensive Runs is also centered near zero but displays meaningful variation in both positive and negative directions, reflecting differences in defensive contributions across player-seasons.
+
+The Statcast distributions are generally more concentrated than several of the traditional and advanced performance measures. Average exit velocity is centered near 89 to 90 mph, with most observations falling between approximately 85 and 93 mph. Average launch angle is centered around 10 to 16 degrees, with observations extending from slightly negative values to above 20 degrees. Barrel percentage is concentrated primarily between approximately 4% and 14%, with a smaller number of observations extending above 15%. Hard-Hit percentage is centered around 40%, with most observations falling between approximately 30% and 50%.
+
+Overall, the performance distributions show that the different groups of variables capture different aspects of player performance. Traditional offensive statistics such as batting average, home runs, and runs scored show substantial variation in offensive production, while advanced metrics such as wRC+, wOBA, Off, and Def provide broader measures of offensive and overall player contribution. The Statcast variables generally have narrower distributions, particularly exit velocity and launch angle, reflecting the more concentrated range of these physical performance measurements. These distributions provide useful context for the later regression analyses by showing the range and general shape of the performance variables included in the dataset.
+
+```{r}
+############################################################
+# Performance Variable Distributions
+############################################################
+
+par(mfrow = c(2, 2))
+
+hist(
+  hitters$BA,
+  main = "Batting Average",
+  xlab = "Batting Average",
+  breaks = 20
+)
+
+hist(
+  hitters$OPS,
+  main = "OPS",
+  xlab = "OPS",
+  breaks = 20
+)
+
+hist(
+  hitters$HR,
+  main = "Home Runs",
+  xlab = "Home Runs",
+  breaks = 20
+)
+
+hist(
+  hitters$R,
+  main = "Runs Scored",
+  xlab = "Runs",
+  breaks = 20
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Advanced Sabermetric Statistics
+############################################################
+
+par(mfrow = c(2, 2))
+
+hist(
+  hitters$wRC_plus,
+  main = "wRC+",
+  xlab = "wRC+",
+  breaks = 20
+)
+
+hist(
+  hitters$wOBA,
+  main = "wOBA",
+  xlab = "wOBA",
+  breaks = 20
+)
+
+hist(
+  hitters$Off,
+  main = "Offensive Runs",
+  xlab = "Off",
+  breaks = 20
+)
+
+hist(
+  hitters$Def,
+  main = "Defensive Runs",
+  xlab = "Def",
+  breaks = 20
+)
+
+par(mfrow = c(1, 1))
+
+
+############################################################
+# Statcast Variables
+############################################################
+
+par(mfrow = c(2, 2))
+
+hist(
+  hitters$EV_Avg,
+  main = "Average Exit Velocity",
+  xlab = "Exit Velocity (mph)",
+  breaks = 20
+)
+
+hist(
+  hitters$LaunchAngle_Avg,
+  main = "Average Launch Angle",
+  xlab = "Launch Angle (degrees)",
+  breaks = 20
+)
+
+hist(
+  hitters$Barrel_Percent,
+  main = "Barrel Percentage",
+  xlab = "Barrel Percentage",
+  breaks = 20
+)
+
+hist(
+  hitters$HardHit_Percent,
+  main = "Hard-Hit Percentage",
+  xlab = "Hard-Hit Percentage",
+  breaks = 20
+)
+
+par(mfrow = c(1, 1))
+```
+
+## Player And Organizational Characteristics
+
+The distributions of player characteristics and categorical classifications provide additional context for the composition of the dataset. Player age is concentrated in the mid-to-late 20s, with the largest number of observations occurring between approximately 25 and 30 years old. The distribution gradually decreases for older players, with relatively few observations above age 35. This pattern reflects the smaller number of player-seasons contributed by older hitters in the sample.
+
+Service time is more strongly concentrated toward the beginning of players' careers. The largest number of observations occurs among players with relatively few years of Major League service, and the frequency generally decreases as service time increases. Only a small number of observations have more than 15 years of service time. This distribution is important for the later salary analysis because service time is closely connected to the contract regimes used in the project.
+
+The position distribution is not uniform across the sample. Outfielders account for the largest number of player-season observations, with 465 observations. Shortstops follow with 208 observations, while first basemen and third basemen account for 199 and 192 observations, respectively. Second basemen account for 177 observations. Catchers and designated hitters have substantially fewer observations, with 65 and 71 observations, respectively. The differences in representation should be considered when interpreting results involving player position.
+
+The financial tier distribution is relatively balanced across the three categories. Big Market teams account for 480 observations, Mid Market teams account for 473 observations, and Small Market teams account for 424 observations. Although the three groups are not identical in size, each financial tier contains a substantial number of observations, providing representation across different organizational market classifications.
+
+The hitter profile distribution is substantially less balanced. The large majority of observations are classified as Balanced hitters, with 1,083 observations. Opposite-field hitters account for 148 observations, while Pull hitters account for 146 observations. This indicates that the hitter profile variable is dominated by the Balanced category, with the other two profiles representing much smaller portions of the sample.
+
+The contract regime distribution is more balanced than the hitter profile distribution. Pre-Arbitration contains 480 observations, Arbitration contains 430 observations, and Free Agency contains 467 observations. The relatively similar number of observations across these three groups provides representation across the major stages of the MLB compensation process.
+
+Overall, the player and organizational characteristics show that the dataset contains broad representation across ages, service-time levels, positions, financial tiers, and contract regimes. However, some categories are naturally more common than others, particularly outfielders among positions and Balanced hitters among hitter profiles. These differences in sample composition provide important context for the salary and player-value analyses that follow.
+
+```{r}
+############################################################
+# Player & Organizational Characteristics
+############################################################
+
+hist(
+  hitters$Age,
+  main = "Distribution of Player Age",
+  xlab = "Age",
+  breaks = 15
+)
+
+
+############################################################
+# Service Time Distribution
+############################################################
+
+hist(
+  hitters$Service_Time,
+  main = "Distribution of Service Time",
+  xlab = "Service Time (Years)",
+  breaks = 15
+)
+
+
+############################################################
+# Position Distribution
+############################################################
+
+barplot(
+  table(hitters$Position),
+  main = "Players by Position",
+  xlab = "Position",
+  ylab = "Number of Player-Season Observations"
+)
+
+
+############################################################
+# Financial Tier Distribution
+############################################################
+
+barplot(
+  table(hitters$financial_tier),
+  main = "Player-Season Observations by Financial Tier",
+  xlab = "Financial Tier",
+  ylab = "Number of Observations"
+)
+
+
+############################################################
+# Hitter Profile Distribution
+############################################################
+
+barplot(
+  table(hitters$hitter_profile),
+  main = "Player-Season Observations by Hitter Profile",
+  xlab = "Hitter Profile",
+  ylab = "Number of Observations"
+)
+
+
+############################################################
+# Contract Regime Distribution
+############################################################
+
+hitters$Contract_Regime <- ifelse(
+  hitters$Service_Time < 3,
+  "Pre-Arbitration",
+  ifelse(
+    hitters$Service_Time < 6,
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+hitters$Contract_Regime <- factor(
+  hitters$Contract_Regime,
+  levels = c(
+    "Pre-Arbitration",
+    "Arbitration",
+    "Free Agency"
+  )
+)
+
+barplot(
+  table(hitters$Contract_Regime),
+  main = "Player-Season Observations by Contract Regime",
+  xlab = "Contract Regime",
+  ylab = "Number of Observations"
+)
+```
+
+## Yearly Trends
+
+Examining yearly trends provides additional context for understanding how player compensation and performance changed across the study period. The analysis considers average base salary, average fWAR, average OPS, average wRC+, and average xwOBA for each season from 2015 through 2025, excluding the 2020 season. These measures were selected to examine whether overall player compensation and average offensive and player-value measures followed similar patterns over time.
+
+Average base salary shows the clearest upward trend across the study period. The average salary was 7.05 million dollars in 2015 and increased to 7.58 million dollars in 2016 before declining slightly to 7.17 million dollars in 2017. Average salary then remained relatively stable at 7.24 million dollars in 2018 and 7.71 million dollars in 2019. After the 2020 season was excluded, average salary was 7.79 million dollars in 2021 and increased steadily in the following seasons. Average salary reached 9.06 million dollars in 2022, 9.35 million dollars in 2023, 9.48 million dollars in 2024, and 10.03 million dollars in 2025. Overall, the average salary increased by approximately $2.98 million between 2015 and 2025, representing a substantial increase in player compensation over the study period.
+
+Average fWAR, in contrast, remained relatively stable across the same period. Average fWAR was 2.88 in 2015, increased slightly to 2.91 in 2016, and then declined to 2.75 in 2017. It remained close to 2.8 in 2018 at 2.83 before increasing to 2.99 in 2019. Following the exclusion of 2020, average fWAR was 2.99 in 2021 and reached 3.02 in 2022. It then decreased to 2.83 in 2023 before increasing to 3.06 in 2024 and declining slightly to 2.89 in 2025. The overall range was relatively narrow, from a low of 2.75 to a high of 3.06. This indicates that the average level of player value in the qualified-hitter sample remained fairly consistent from year to year.
+
+Average OPS displayed more noticeable year-to-year variation than fWAR. The average OPS was .773 in 2015 and increased to .797 in 2016 and .806 in 2017. It then declined slightly to .784 in 2018 before reaching the highest value in the series, .826, in 2019. After the excluded 2020 season, average OPS was .797 in 2021 before declining to .761 in 2022. It increased to .779 in 2023 but then decreased again to .765 in 2024 and .767 in 2025. The pattern shows that offensive production measured by OPS fluctuated across the study period rather than following a consistent upward or downward trend.
+
+Average wRC+ followed a relatively stable pattern similar to average fWAR. The average wRC+ was 110.3 in 2015 and 111.8 in 2016 before declining slightly to 110.6 in 2017. It increased to 111.4 in 2018 and 113.8 in 2019. After 2020, the average increased from 114.3 in 2021 to 115.3 in 2022, which was the highest value observed. Average wRC+ then declined to 111.7 in 2023, increased to 114.2 in 2024, and finished at 112.6 in 2025. Although there were several year-to-year changes, the values remained within a relatively narrow range of 110.3 to 115.3. This suggests that the average offensive performance of qualified hitters, when measured using wRC+, remained relatively consistent over the study period.
+
+Average xwOBA also showed considerable stability across the years. The average xwOBA was .328 in 2015 and increased to .336 in 2016 and .337 in 2017. It declined slightly to .333 in 2018 before reaching the highest value of .344 in 2019. Following the excluded 2020 season, average xwOBA was .341 in 2021 and then declined to .332 in 2022. It increased to .336 in 2023 before declining slightly to .335 in 2024 and .333 in 2025. The overall range was only .016, from .328 to .344, indicating that expected offensive production based on underlying performance remained relatively stable across the sample.
+
+Taken together, the yearly trends show an important difference between player compensation and the performance measures examined in the dataset. Average base salary increased substantially from 7.05 million dollars in 2015 to 10.03 million dollars in 2025, while average fWAR, wRC+, and xwOBA remained relatively stable. OPS displayed more year-to-year variation, but it also did not show a sustained increase over the full study period. These patterns indicate that the substantial increase in average salary occurred alongside relatively stable average performance among the qualified hitters in the sample.
+
+The yearly trends do not by themselves establish why salaries increased or whether changes in player performance caused changes in compensation. Instead, they provide descriptive context for the later statistical analyses. The difference between the relatively stable performance measures and the upward movement in average salary suggests that factors beyond the overall average level of player performance may be relevant to understanding MLB compensation. These factors include individual player performance, age, service time, position, contract regime, organizational financial tier, and other characteristics examined in the subsequent analyses.
+
+Overall, the yearly trend analysis demonstrates that the composition of player performance remained relatively consistent across the study period while average compensation increased. This provides useful background for the remainder of the project, where regression models are used to examine the relationships between individual player performance, player characteristics, and salary rather than relying solely on changes in yearly averages.
+
+```{r}
+############################################################
+# Yearly Trends
+############################################################
+
+
+############################################################
+# Average Base Salary by Year
+############################################################
+
+average_salary <- aggregate(
+  Base_Salary ~ Year,
+  data = hitters,
+  FUN = mean
+)
+
+plot(
+  average_salary$Year,
+  average_salary$Base_Salary,
+  type = "b",
+  main = "Average MLB Player Salary by Year",
+  xlab = "Year",
+  ylab = "Average Base Salary ($)")
+
+
+############################################################
+# Average fWAR by Year
+############################################################
+
+average_war <- aggregate(
+  WAR ~ Year,
+  data = hitters,
+  FUN = mean
+)
+
+plot(
+  average_war$Year,
+  average_war$WAR,
+  type = "b",
+  main = "Average fWAR by Year",
+  xlab = "Year",
+  ylab = "Average fWAR")
+
+
+############################################################
+# Average OPS by Year
+############################################################
+
+average_ops <- aggregate(
+  OPS ~ Year,
+  data = hitters,
+  FUN = mean
+)
+
+plot(
+  average_ops$Year,
+  average_ops$OPS,
+  type = "b",
+  main = "Average OPS by Year",
+  xlab = "Year",
+  ylab = "Average OPS")
+
+
+############################################################
+# Average wRC+ by Year
+############################################################
+
+average_wrc <- aggregate(
+  wRC_plus ~ Year,
+  data = hitters,
+  FUN = mean
+)
+
+plot(
+  average_wrc$Year,
+  average_wrc$wRC_plus,
+  type = "b",
+  main = "Average wRC+ by Year",
+  xlab = "Year",
+  ylab = "Average wRC+")
+
+############################################################
+# Average xwOBA by Year
+############################################################
+
+average_xwoba <- aggregate(
+  xwOBA ~ Year,
+  data = hitters,
+  FUN = mean
+)
+
+plot(
+  average_xwoba$Year,
+  average_xwoba$xwOBA,
+  type = "b",
+  main = "Average xwOBA by Year",
+  xlab = "Year",
+  ylab = "Average xwOBA")
+
+
+```
+
+## EDA Summary
+
+The exploratory data analysis provides an overall understanding of the structure, distributions, and characteristics of the completed MLB player-season dataset before statistical modeling. The final dataset contains 1,377 qualified hitter observations and 50 variables covering traditional offensive statistics, advanced sabermetric measures, Statcast metrics, player characteristics, salary information, and organizational classifications. The data-quality checks found no missing values, no duplicate player-season observations, and no negative salary values, providing a consistent dataset for the analyses that follow.
+
+The summary statistics demonstrate substantial variation across both player performance and compensation. Traditional offensive statistics such as home runs, runs, RBI, batting average, and OPS show meaningful differences across player-seasons, while advanced metrics provide additional measures of offensive and overall player value. WAR ranged from -2.54 to 11.33, while wRC+ ranged from approximately 46 to 220. The Statcast variables generally displayed more concentrated distributions, particularly average exit velocity, launch angle, and other contact-quality measures. These differences demonstrate that the dataset captures several distinct dimensions of player performance rather than relying on a single type of statistic.
+
+Salary was one of the most distinct variables examined during the EDA. Base salary was strongly right-skewed, with a mean of approximately 8.23 million dollars compared with a median of 5.20 million dollars and a maximum of 70 million dollars. The log transformation substantially reduced the influence of the highest salaries and produced a more balanced distribution. This supports the use of log_salary as an alternative response variable in later salary regression models while retaining raw salary for descriptive interpretation.
+
+The performance distributions also provide useful context for the modeling stage. Traditional statistics such as batting average, OPS, home runs, and runs scored showed variation in offensive production, while advanced measures such as wRC+, wOBA, Off, and Def captured broader differences in player contribution. Statcast measures such as exit velocity, launch angle, barrel percentage, and hard-hit percentage generally had narrower distributions, reflecting the more concentrated range of these physical performance measurements. These patterns demonstrate why multiple categories of performance variables are included in the project rather than relying exclusively on traditional statistics.
+
+The player and organizational characteristics show that the dataset contains representation across different ages, service-time levels, positions, financial tiers, hitter profiles, and contract regimes. However, the distribution is not completely uniform across categories. Outfielders make up the largest positional group, while catcher and designated hitter observations are less common. Balanced hitters also account for the large majority of hitter-profile observations. The financial-tier and contract-regime classifications are more evenly distributed, providing representation across the different organizational and compensation environments considered in the project.
+
+The yearly trend analysis revealed an additional distinction between player compensation and player performance. Average base salary increased from 7.05 million dollars in 2015 to 10.03 million dollars in 2025, while average fWAR remained relatively stable between 2.75 and 3.06. Average wRC+ and xwOBA also remained within relatively narrow ranges, while OPS showed more noticeable year-to-year variation without a consistent long-term increase. These results show that average player compensation increased substantially over the study period while the average performance measures examined remained comparatively stable.
+
+Overall, the exploratory analysis establishes several important characteristics of the dataset that should be considered in the statistical analyses that follow. The dataset is complete and structurally consistent, salary is strongly right-skewed and therefore motivates the use of a log-transformed response, performance variables vary substantially in both scale and distribution, and player characteristics are distributed unevenly across several categorical groups. The yearly trends also show that compensation and average performance do not follow identical patterns over time. These findings provide the descriptive foundation for the regression analyses developed in the remainder of the project, where the relationships among player performance, player characteristics, and compensation can be examined more formally.
