@@ -1,0 +1,535 @@
+---
+title: "mlb-value-diagnostics"
+author: "Jacob Rouette"
+date: "2026-11-06"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r} 
+data_path <- Sys.getenv("STATCAST_DATA_PATH")
+
+hitters <- read.csv(file.path(data_path, "FullStatcastData.csv"))
+```
+
+## Oulier Analysis
+
+The outlier analysis was conducted to identify unusual observations across the numeric variables in the dataset. Potential outliers were identified using the 1.5 x IQR rule, where observations below \(Q1 - 1.5(IQR)\) or above \(Q3 + 1.5(IQR)\) were flagged. Boxplots were also used to visually examine the distributions of the numeric variables. The presence of an outlier does not automatically mean that an observation should be removed because extreme values can represent legitimate differences between MLB players.
+
+The IQR analysis showed that several variables contained a relatively large number of potential outliers. Stolen bases had the most, with 41 potential outliers, followed by OPS with 33 and Off with 30. xwOBA and wRC+ each had 27 potential outliers, while HardHit% had 26. Average exit velocity and linedrive percentage each had 25, and BB% and wOBA each had 24. Other variables with notable numbers of potential outliers included xSLG, SLG, Base Salary, OBP, WAR, BsR, and runs. These results show that the dataset contains a number of observations that are unusually high or low compared with the middle 50% of player seasons.
+
+The boxplot supports these findings. Many of the variables have observations extending well beyond their main distributions, particularly on the upper end. This is expected in several MLB statistics because a small number of highly productive players can be substantially different from the average qualified hitter. The boxplot also shows that some variables have more concentrated distributions while others have much wider ranges.
+
+Salary is one of the clearest examples of extreme observations. The median salary was $5.2 million, with the middle 50% of observations ranging from $765,000 to $13 million. The IQR rule identified 22 potential salary outliers. The highest salaries included Shohei Ohtani at $70 million in both 2024 and 2025, Juan Soto at $61.875 million in 2025, and Aaron Judge at $40 million in both 2024 and 2025. These observations are not necessarily errors. Instead, they represent the upper end of MLB's salary distribution and are important for a project examining what factors influence player compensation.
+
+The lower end of the salary distribution also shows why the dataset should not simply remove extreme observations. The lowest salaries were around $500,000 to $509,000, and several of these players still produced meaningful levels of WAR. For example, Kris Bryant had a $507,500 salary and 6.10 WAR in 2015, while Matt Duffy had a $509,000 salary and 4.40 WAR. These observations reflect differences in players' stages of their careers and contract situations rather than necessarily representing unusual or incorrect data.
+
+WAR also contained 20 potential outliers. The median WAR was approximately 2.76, with the middle 50% ranging from 1.54 to 4.04. The highest WAR seasons were substantially above this range, including Aaron Judge's 11.33 WAR in 2024 and 11.08 WAR in 2022, Bobby Witt Jr.'s 10.49 WAR in 2024, and Mookie Betts' 10.19 WAR in 2018. At the lower end, the dataset included several negative WAR seasons, with the lowest being Chris Davis at -2.54 WAR in 2018. These observations demonstrate the wide range of player performance represented in the dataset.
+
+Overall, the outlier analysis indicates that the dataset contains numerous extreme observations, especially among offensive production, Statcast measures, salary, and WAR. However, many of these observations represent legitimate MLB player seasons rather than apparent data-entry errors. Therefore, the potential outliers were retained rather than removed. This is particularly important for the salary analysis because removing the highest-paid players would eliminate some of the observations most relevant to understanding the relationship between player characteristics, performance, and compensation. Any potential influence of these observations on the regression results can be evaluated separately through model diagnostics.
+
+```{r}
+# Load packages
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+options(scipen = 999)
+
+############################################################
+# OUTLIER ANALYSIS
+############################################################
+
+
+############################################################
+# NUMERIC VARIABLES
+############################################################
+
+numeric_vars <- c(
+  "Service_Time",
+  "Age",
+  "PA",
+  "HR",
+  "K_Percent",
+  "BB_Percent",
+  "BA",
+  "SLG",
+  "OBP",
+  "OPS",
+  "ISO",
+  "BABIP",
+  "RBI",
+  "SB",
+  "G",
+  "R",
+  "xBA",
+  "xSLG",
+  "wOBA",
+  "xwOBA",
+  "xISO",
+  "EV_Avg",
+  "LaunchAngle_Avg",
+  "SweetSpot_Percent",
+  "Barrel_Percent",
+  "HardHit_Percent",
+  "Whiff_Percent",
+  "Swing_Percent",
+  "Pull_Percent",
+  "StraightAway_Percent",
+  "Opposite_Percent",
+  "Groundball_Percent",
+  "Flyball_Percent",
+  "Linedrive_Percent",
+  "WAR",
+  "wRC_plus",
+  "BsR",
+  "Def",
+  "Off",
+  "Base_Salary"
+)
+
+############################################################
+# IQR OUTLIER TABLE
+############################################################
+
+outlier_table <- data.frame(
+  Variable = numeric_vars,
+  Median = sapply(
+    hitters[numeric_vars],
+    median,
+    na.rm = TRUE
+  ),
+  Q1 = sapply(
+    hitters[numeric_vars],
+    quantile,
+    0.25,
+    na.rm = TRUE
+  ),
+  Q3 = sapply(
+    hitters[numeric_vars],
+    quantile,
+    0.75,
+    na.rm = TRUE
+  ),
+  IQR = sapply(
+    hitters[numeric_vars],
+    IQR,
+    na.rm = TRUE
+  ),
+  row.names = NULL
+)
+
+
+# Calculate the lower and upper IQR boundaries.
+
+outlier_table$Lower_Bound <-
+  outlier_table$Q1 -
+  1.5 * outlier_table$IQR
+
+outlier_table$Upper_Bound <-
+  outlier_table$Q3 +
+  1.5 * outlier_table$IQR
+
+
+# Count the number of potential outliers.
+
+outlier_table$Number_Outliers <- sapply(
+  1:length(numeric_vars),
+  function(i) {
+    sum(
+      hitters[[numeric_vars[i]]] <
+        outlier_table$Lower_Bound[i] |
+      hitters[[numeric_vars[i]]] >
+        outlier_table$Upper_Bound[i],
+      na.rm = TRUE
+    )
+  }
+)
+
+
+############################################################
+# VIEW OUTLIER TABLE
+############################################################
+
+
+outlier_table
+
+
+outlier_table %>%
+  arrange(desc(Number_Outliers))
+
+
+############################################################
+# BOXPLOTS
+############################################################
+
+
+numeric_long <- hitters %>%
+  select(all_of(numeric_vars)) %>%
+  scale() %>%
+  as.data.frame() %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = "Variable",
+    values_to = "Standardized_Value"
+  )
+
+
+ggplot(
+  numeric_long,
+  aes(
+    x = Variable,
+    y = Standardized_Value
+  )
+) +
+  geom_boxplot() +
+  labs(
+    title = "Standardized Boxplots of Numeric Variables",
+    x = "Variable",
+    y = "Standardized Value"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(
+      angle = 90,
+      hjust = 1
+    )
+  )
+
+
+############################################################
+# EXTREME SALARY OBSERVATIONS
+############################################################
+
+
+top_salary <- hitters %>%
+  arrange(desc(Base_Salary)) %>%
+  select(
+    Full_Name,
+    Year,
+    Base_Salary,
+    WAR,
+    Position
+  ) %>%
+  head(10)
+
+top_salary
+
+
+low_salary <- hitters %>%
+  arrange(Base_Salary) %>%
+  select(
+    Full_Name,
+    Year,
+    Base_Salary,
+    WAR,
+    Position
+  ) %>%
+  head(10)
+
+low_salary
+
+
+############################################################
+# EXTREME WAR OBSERVATIONS
+############################################################
+
+
+top_war <- hitters %>%
+  arrange(desc(WAR)) %>%
+  select(
+    Full_Name,
+    Year,
+    WAR,
+    Base_Salary,
+    Position
+  ) %>%
+  head(10)
+
+top_war
+
+
+bottom_war <- hitters %>%
+  arrange(WAR) %>%
+  select(
+    Full_Name,
+    Year,
+    WAR,
+    Base_Salary,
+    Position
+  ) %>%
+  head(10)
+
+bottom_war
+
+
+```
+
+## Correlation Analysis
+
+The correlation analysis was used to examine the relationships among the quantitative variables in the dataset. The main goals were to identify which variables were most strongly related to fWAR, which variables were most strongly related to salary, and which predictors were highly correlated with one another. Pearson correlation coefficients were used, where values closer to 1 indicate a strong positive relationship, values closer to -1 indicate a strong negative relationship, and values near 0 indicate a weak linear relationship.
+
+Overall Correlation Patterns
+
+The correlation matrix showed several groups of variables with very strong relationships. Many of the traditional offensive statistics were highly correlated with one another. For example, OPS had a correlation of 0.990 with wOBA, 0.958 with SLG, and 0.944 with wRC+. Similarly, wOBA had correlations of 0.967 with wRC+ and 0.950 with Off. These strong relationships are expected because many of these statistics measure similar aspects of offensive performance.
+
+The Statcast variables also showed several strong relationships. xISO and xSLG had a correlation of 0.947, while Barrel% and xISO had a correlation of 0.946. HardHit% and EV_Avg had a correlation of 0.938. The expected statistics were also strongly related to their traditional counterparts, such as xBA and BA with a correlation of 0.791 and xwOBA and wOBA with a correlation of 0.845.
+
+Several relationships among batted-ball variables were also particularly strong. Groundball% and LaunchAngle_Avg had a correlation of -0.955, while Flyball% and LaunchAngle_Avg had a correlation of 0.834. Groundball% and Flyball% had a correlation of -0.851. This indicates that players with higher average launch angles generally had fewer groundballs and more flyballs.
+
+There were also strong relationships involving playing time and player characteristics. Service Time and Age had a correlation of 0.861. Games and plate appearances had a correlation of 0.816, while PA and R had a correlation of 0.723. These relationships reflect the connection between a player's age, experience, and opportunity to accumulate statistics.
+
+Correlations with fWAR
+
+The strongest relationships with fWAR were primarily offensive performance measures. Off had the strongest correlation with WAR at 0.858, followed by wRC+ at 0.794 and wOBA at 0.774. OPS also had a strong positive correlation of 0.757, while runs had a correlation of 0.724.
+
+Other traditional offensive statistics had moderate positive relationships with WAR. OBP had a correlation of 0.693, SLG had 0.690, and BA had 0.576. ISO had a correlation of 0.522, while HR and RBI had correlations of 0.480 and 0.471, respectively.
+
+The Statcast variables generally had weaker relationships with WAR than the strongest traditional and sabermetric measures. xwOBA had the strongest Statcast relationship at 0.592, followed by xBA at 0.458, xSLG at 0.515, and xISO at 0.420. Barrel% had a correlation of 0.336, while HardHit% and EV_Avg had correlations of 0.289 and 0.322.
+
+Some variables had weak or negative relationships with WAR. Age had a correlation of -0.193, while Groundball% had a correlation of -0.193. K% had a weak negative correlation of -0.107. Service Time also had a weak negative correlation with WAR at -0.107.
+
+Base salary had only a 0.140 correlation with WAR. This is an important result because it suggests that salary and player performance, as measured by WAR, do not have a particularly strong linear relationship when considered by themselves.
+
+Correlations with Salary
+
+Salary showed a very different pattern from WAR. Service Time had the strongest relationship with salary among the explanatory variables, with a correlation of 0.777 with log salary. Age also had a relatively strong correlation of 0.668. This indicates that salary is much more closely associated with a player's experience and career stage than with any single performance statistic.
+
+Performance variables had considerably weaker relationships with salary. xwOBA had the strongest Statcast correlation with log salary at 0.272. xSLG had a correlation of 0.241, while xISO had a correlation of 0.208. Among traditional statistics, RBI had the strongest relationship at 0.206, followed by BB% at 0.200 and HR at 0.175.
+
+wRC+ had a correlation of only 0.182 with log salary, while OPS had a correlation of 0.166. WAR had one of the weakest relationships with salary at only 0.064. This further supports the idea that MLB salary is influenced by factors beyond a player's individual performance level.
+
+Some variables had weak negative relationships with salary. BsR had a correlation of -0.194, Def had -0.173, and SB had -0.126. These negative correlations should not be interpreted as evidence that these statistics directly reduce salary. They may instead reflect differences in player type, position, age, or contract situation.
+
+Highly Correlated Variables
+
+The analysis identified many variable pairs with absolute correlations of at least 0.70. The strongest relationship was between wOBA and OPS at 0.990. Other extremely strong relationships included Off and wRC+ at 0.974, wRC+ and wOBA at 0.967, and OPS and SLG at 0.958.
+
+There were also strong relationships between statistics that measure similar underlying skills. ISO and HR had a correlation of 0.945, xISO and xSLG had 0.947, Barrel% and xISO had 0.946, and HardHit% and EV_Avg had 0.938. Whiff% and K% also had a strong positive correlation of 0.889.
+
+The correlation between Base Salary and Service Time was 0.700, while Service Time and Age had a correlation of 0.861. These relationships are especially important for the salary analysis because they show that experience-related variables are closely connected.
+
+Relationship to the Regression Models
+
+The correlation analysis provides useful context for the regression models used throughout the project. The strong relationships among OPS, wOBA, wRC+, Off, SLG, and other offensive measures indicate that including many of these variables in the same regression model could create multicollinearity. The same issue exists among several Statcast measures, particularly xSLG, xISO, xwOBA, and Barrel%.
+
+The salary correlations also help explain why service time and age were important variables in the salary models. Service Time had a much stronger relationship with log salary than WAR, xwOBA, wRC+, or the other performance measures examined. This supports the idea that MLB salaries are influenced heavily by labor-market factors in addition to on-field performance.
+
+Overall, the correlation analysis shows that fWAR is most strongly associated with overall offensive value, while salary is much more strongly associated with service time and age than with any individual performance statistic. The large number of highly correlated performance variables also demonstrates why multicollinearity needs to be considered when selecting predictors for regression models.
+
+```{r}
+library(tidyverse)
+library(corrplot)
+
+options(scipen = 999)
+
+############################################################
+# CORRELATION ANALYSIS
+############################################################
+
+
+############################################################
+# 1. SELECT QUANTITATIVE VARIABLES
+############################################################
+
+
+cor_data <- hitters %>%
+  select(
+    Age,
+    Service_Time,
+    Base_Salary,
+    PA,
+    HR,
+    K_Percent,
+    BB_Percent,
+    BA,
+    SLG,
+    OBP,
+    OPS,
+    ISO,
+    BABIP,
+    RBI,
+    SB,
+    G,
+    R,
+    xBA,
+    xSLG,
+    wOBA,
+    xwOBA,
+    xISO,
+    EV_Avg,
+    LaunchAngle_Avg,
+    SweetSpot_Percent,
+    Barrel_Percent,
+    HardHit_Percent,
+    Whiff_Percent,
+    Swing_Percent,
+    Pull_Percent,
+    StraightAway_Percent,
+    Opposite_Percent,
+    Groundball_Percent,
+    Flyball_Percent,
+    Linedrive_Percent,
+    WAR,
+    wRC_plus,
+    BsR,
+    Def,
+    Off
+  )
+
+
+############################################################
+# 2. CREATE CORRELATION MATRIX
+############################################################
+
+
+cor_matrix <- cor(
+  cor_data,
+  use = "complete.obs",
+  method = "pearson"
+)
+
+
+round(cor_matrix, 2)
+
+
+############################################################
+# 3. CORRELATION HEATMAP
+############################################################
+
+
+corrplot(
+  cor_matrix,
+  method = "color",
+  type = "upper",
+  order = "hclust",
+  tl.col = "black",
+  tl.cex = 0.6,
+  diag = FALSE
+)
+
+
+############################################################
+# 4. CORRELATIONS WITH WAR
+############################################################
+
+
+war_correlations <- tibble(
+  Variable = names(cor_matrix[, "WAR"]),
+  Correlation = cor_matrix[, "WAR"]
+)
+
+
+war_correlations <- war_correlations %>%
+  filter(Variable != "WAR") %>%
+  arrange(desc(abs(Correlation)))
+
+
+
+war_correlations
+
+
+############################################################
+# 5. CORRELATIONS WITH LOG SALARY
+############################################################
+
+
+hitters$log_salary <- log(hitters$Base_Salary)
+
+salary_data <- hitters %>%
+  select(
+    log_salary,
+    Age,
+    Service_Time,
+    PA,
+    HR,
+    K_Percent,
+    BB_Percent,
+    BA,
+    SLG,
+    OBP,
+    OPS,
+    ISO,
+    BABIP,
+    RBI,
+    SB,
+    G,
+    R,
+    xBA,
+    xSLG,
+    wOBA,
+    xwOBA,
+    xISO,
+    EV_Avg,
+    LaunchAngle_Avg,
+    SweetSpot_Percent,
+    Barrel_Percent,
+    HardHit_Percent,
+    Whiff_Percent,
+    Swing_Percent,
+    Pull_Percent,
+    StraightAway_Percent,
+    Opposite_Percent,
+    Groundball_Percent,
+    Flyball_Percent,
+    Linedrive_Percent,
+    WAR,
+    wRC_plus,
+    BsR,
+    Def,
+    Off
+  )
+
+
+salary_correlations <- cor(
+  salary_data,
+  use = "complete.obs",
+  method = "pearson"
+)
+
+
+salary_correlations <- tibble(
+  Variable = names(salary_correlations[, "log_salary"]),
+  Correlation = salary_correlations[, "log_salary"]
+)
+
+
+salary_correlations <- salary_correlations %>%
+  filter(Variable != "log_salary") %>%
+  arrange(desc(abs(Correlation)))
+
+
+salary_correlations
+
+
+############################################################
+# 6. IDENTIFY STRONG CORRELATIONS
+############################################################
+
+
+strong_pairs <- which(
+  abs(cor_matrix) >= 0.70 &
+    lower.tri(cor_matrix),
+  arr.ind = TRUE
+)
+
+
+high_correlations <- tibble(
+  Variable_Pair = paste(
+    rownames(cor_matrix)[strong_pairs[, 1]],
+    colnames(cor_matrix)[strong_pairs[, 2]],
+    sep = " - "
+  ),
+  Correlation = cor_matrix[strong_pairs]
+)
+
+
+high_correlations <- high_correlations %>%
+  arrange(desc(abs(Correlation)))
+
+
+high_correlations
+```
